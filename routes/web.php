@@ -27,4 +27,12 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/update-mode', [DashboardController::class, 'updateMode'])->name('dashboard.update-mode');
     Route::post('/api/toggle-relay', [DashboardController::class, 'toggleRelay'])->name('dashboard.toggle-relay');
     Route::post('/api/save-schedule', [DashboardController::class, 'saveSchedule'])->name('dashboard.save-schedule');
+
+    // Config routes
+    Route::get('/api/fuzzy-config', [DashboardController::class, 'getFuzzyConfig'])->name('dashboard.fuzzy-config');
+    Route::post('/api/fuzzy-config', [DashboardController::class, 'saveFuzzyConfig'])->name('dashboard.fuzzy-config.save');
+    Route::post('/api/fuzzy-config/reset', [DashboardController::class, 'resetFuzzyConfig'])->name('dashboard.fuzzy-config.reset');
+    Route::post('/api/sys-config', [DashboardController::class, 'saveSysConfig'])->name('dashboard.sys-config');
+    Route::get('/api/export-csv', [DashboardController::class, 'exportCsv'])->name('dashboard.export-csv');
+    Route::post('/api/reset-log', [DashboardController::class, 'resetLog'])->name('dashboard.reset-log');
 });

@@ -13,6 +13,8 @@ class DeviceControl extends Model
         'manual_mode_type',
         'manual_duration',
         'schedules_json',
+        'fuzzy_config',
+        'sys_config',
         'updated_by_user_id',
     ];
 
@@ -21,6 +23,8 @@ class DeviceControl extends Model
         'manual_mode_type' => 'integer',
         'manual_duration' => 'integer',
         'schedules_json' => 'array',
+        'fuzzy_config' => 'array',
+        'sys_config' => 'array',
     ];
 
     public function updatedBy(): BelongsTo

@@ -13,6 +13,7 @@ return new class extends Migration
     {
         Schema::create('sensor_logs', function (Blueprint $table) {
             $table->id();
+            $table->string('device_key')->default('NURSERY_01')->index();
             $table->float('temperature');
             $table->float('humidity');
             $table->integer('light_level');

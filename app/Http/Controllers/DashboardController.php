@@ -200,4 +200,134 @@ class DashboardController extends Controller
             'updated_at' => now()->format('d M Y, H:i T'),
         ]);
     }
+
+    // ── Fuzzy Config ──────────────────────────────────────────
+    public function getFuzzyConfig(): JsonResponse
+    {
+        $deviceControl = DeviceControl::where('device_key', 'NURSERY_01')->first();
+        $fuzzy = $deviceControl ? ($deviceControl->fuzzy_config ?? []) : [];
+        return response()->json(array_merge($this->defaultFuzzy(), $fuzzy));
+    }
+
+    public function saveFuzzyConfig(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        $deviceControl = DeviceControl::where('device_key', 'NURSERY_01')->first();
+        if (!$deviceControl) {
+            $deviceControl = new DeviceControl(['device_key' => 'NURSERY_01']);
+        }
+        $deviceControl->fuzzy_config = $request->all();
+        $deviceControl->updated_by_user_id = $user->id;
+        $deviceControl->save();
+
+        ActivityLog::create([
+            'user_id' => $user->id,
+            'action' => "Memperbarui Konfigurasi Parameter Fuzzy",
+        ]);
+
+        return response()->json(['status' => 'success']);
+    }
+
+    public function resetFuzzyConfig(): JsonResponse
+    {
+        $user = Auth::user();
+        $deviceControl = DeviceControl::where('device_key', 'NURSERY_01')->first();
+        if ($deviceControl) {
+            $deviceControl->fuzzy_config = $this->defaultFuzzy();
+            $deviceControl->updated_by_user_id = $user->id;
+            $deviceControl->save();
+        }
+
+        ActivityLog::create([
+            'user_id' => $user->id,
+            'action' => "Reset Parameter Fuzzy ke Nilai Default",
+        ]);
+
+        return response()->json(['status' => 'success']);
+    }
+
+    private function defaultFuzzy(): array
+    {
+        return [
+            'basahMax' => 30, 'basahMin' => 50,
+            'lembabLow' => 30, 'lembabMid' => 55, 'lembabHigh' => 80,
+            'keringLow' => 60, 'keringMax' => 80,
+            'dinginMax' => 20, 'dinginMin' => 25,
+            'normalLow' => 22, 'normalMid' => 27, 'normalHigh' => 32,
+            'panasLow' => 30, 'panasMax' => 35,
+            'redupMax' => 5000, 'redupMin' => 25000,
+            'sedangLow' => 5000, 'sedangMid' => 35000, 'sedangHigh' => 65000,
+            'terangLow' => 45000, 'terangMax' => 65000,
+            'pendekMax' => 10, 'sedangOutMax' => 20, 'defuzzMax' => 30,
+        ];
+    }
+
+    // ── Sys Config ────────────────────────────────────────────
+    public function saveSysConfig(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'sensor_interval' => 'nullable|integer|min:1|max:3600',
+            'log_interval'    => 'nullable|integer',
+            'cooldown'        => 'nullable|integer',
+        ]);
+
+        $user = Auth::user();
+        $deviceControl = DeviceControl::where('device_key', 'NURSERY_01')->first();
+        if (!$deviceControl) {
+            $deviceControl = new DeviceControl(['device_key' => 'NURSERY_01']);
+        }
+        $deviceControl->sys_config = $validated;
+        $deviceControl->updated_by_user_id = $user->id;
+        $deviceControl->save();
+
+        ActivityLog::create([
+            'user_id' => $user->id,
+            'action' => "Memperbarui Konfigurasi Sistem (Interval/Cooldown)",
+        ]);
+
+        return response()->json(['status' => 'success']);
+    }
+
+    // ── Export CSV ────────────────────────────────────────────
+    public function exportCsv()
+    {
+        $logs = SensorLog::with(['zoneLogs' => fn($q) => $q->orderBy('zone_id')])
+            ->latest()->take(100)->get();
+
+        $headers = [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="smart_nursery_log.csv"',
+        ];
+
+        $callback = function () use ($logs) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Waktu', 'Suhu (°C)', 'Lembab (%)', 'Cahaya (lx)',
+                'Zona1-Tanah%', 'Zona2-Tanah%', 'Zona3-Tanah%', 'Zona4-Tanah%', 'Zona5-Tanah%', 'Mode']);
+            foreach ($logs as $log) {
+                $zones = $log->zoneLogs->pluck('soil_moisture')->toArray();
+                while (count($zones) < 5) { $zones[] = '-'; }
+                fputcsv($handle, array_merge([
+                    $log->created_at->format('d/m/Y H:i:s'),
+                    $log->temperature, $log->humidity, $log->light_level,
+                ], $zones, [$log->system_mode ?? 0]));
+            }
+            fclose($handle);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    // ── Reset Log ─────────────────────────────────────────────
+    public function resetLog(): JsonResponse
+    {
+        $user = Auth::user();
+        SensorLog::query()->delete();
+
+        ActivityLog::create([
+            'user_id' => $user->id,
+            'action' => "Menghapus Semua Data Log Sensor",
+        ]);
+
+        return response()->json(['status' => 'success']);
+    }
 }

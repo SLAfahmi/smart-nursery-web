@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class SensorLog extends Model
 {
     protected $fillable = [
+        'device_key',
         'temperature',
         'humidity',
         'light_level',

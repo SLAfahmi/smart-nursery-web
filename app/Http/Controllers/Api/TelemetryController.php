@@ -41,12 +41,13 @@ class TelemetryController extends Controller
             DB::beginTransaction();
 
             $sensorLog = SensorLog::create([
-                'temperature' => $validated['temperature'],
-                'humidity' => $validated['humidity'],
-                'light_level' => (int)$validated['light_level'],
-                'system_mode' => $validated['system_mode'] ?? 0,
+                'device_key'     => $deviceKey,
+                'temperature'    => $validated['temperature'],
+                'humidity'       => $validated['humidity'],
+                'light_level'    => (int)$validated['light_level'],
+                'system_mode'    => $validated['system_mode'] ?? 0,
                 'is_offline_data' => $validated['is_offline_data'] ?? false,
-                'recorded_at' => $validated['recorded_at'] ?? now(),
+                'recorded_at'    => $validated['recorded_at'] ?? now(),
             ]);
 
             foreach ($validated['zones'] as $zone) {
@@ -117,12 +118,13 @@ class TelemetryController extends Controller
 
             foreach ($validated['batch'] as $item) {
                 $sensorLog = SensorLog::create([
-                    'temperature' => $item['temperature'],
-                    'humidity' => $item['humidity'],
-                    'light_level' => (int)$item['light_level'],
-                    'system_mode' => $item['system_mode'] ?? 0,
+                    'device_key'     => $validated['device_key'] ?? 'NURSERY_01',
+                    'temperature'    => $item['temperature'],
+                    'humidity'       => $item['humidity'],
+                    'light_level'    => (int)$item['light_level'],
+                    'system_mode'    => $item['system_mode'] ?? 0,
                     'is_offline_data' => true,
-                    'recorded_at' => $item['recorded_at'] ?? now(),
+                    'recorded_at'    => $item['recorded_at'] ?? now(),
                 ]);
 
                 foreach ($item['zones'] as $zone) {

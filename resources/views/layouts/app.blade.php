@@ -39,8 +39,7 @@
                 <svg id="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round" style="display:none">
                     <circle cx="12" cy="12" r="4" />
-                    <path
-                        d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+                    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
                 </svg>
                 <svg id="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
@@ -58,11 +57,156 @@
         </div>
     </header>
 
-    <main class="main-content">
-        @yield('content')
-    </main>
+    <!-- ============ APP SHELL (sidebar + content) ============ -->
+    <div class="app-shell">
+
+        <!-- DESKTOP SIDEBAR -->
+        @auth
+        <aside class="sidebar" id="sidebar" role="navigation" aria-label="Menu Utama">
+            <nav class="sidebar-nav">
+                <button class="sidebar-item active" data-tab="tab-dashboard" onclick="switchTab('tab-dashboard', this)" aria-current="page">
+                    <span class="sidebar-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="7" height="7" rx="1"/>
+                            <rect x="14" y="3" width="7" height="7" rx="1"/>
+                            <rect x="3" y="14" width="7" height="7" rx="1"/>
+                            <rect x="14" y="14" width="7" height="7" rx="1"/>
+                        </svg>
+                    </span>
+                    <span class="sidebar-label">Dashboard</span>
+                </button>
+
+                <button class="sidebar-item" data-tab="tab-control" onclick="switchTab('tab-control', this)">
+                    <span class="sidebar-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+                        </svg>
+                    </span>
+                    <span class="sidebar-label">Kontrol</span>
+                </button>
+
+                <button class="sidebar-item" data-tab="tab-log" onclick="switchTab('tab-log', this)">
+                    <span class="sidebar-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                            <polyline points="10 9 9 9 8 9"/>
+                        </svg>
+                    </span>
+                    <span class="sidebar-label">Log</span>
+                </button>
+
+                <button class="sidebar-item" data-tab="tab-config" onclick="switchTab('tab-config', this)">
+                    <span class="sidebar-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+                        </svg>
+                    </span>
+                    <span class="sidebar-label">Config</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-bottom">
+                <div class="sidebar-version">v1.0 · Smart Nursery</div>
+            </div>
+        </aside>
+        @endauth
+
+        <!-- MAIN CONTENT AREA -->
+        <main class="main-content" id="main-content">
+            @yield('content')
+        </main>
+
+    </div><!-- /app-shell -->
+
+    <!-- ============ MOBILE BOTTOM TAB BAR ============ -->
+    @auth
+    <nav class="bottom-nav" id="bottom-nav" aria-label="Navigasi Tab">
+        <button class="bottom-nav-item active" data-tab="tab-dashboard" onclick="switchTab('tab-dashboard', this)">
+            <span class="bottom-nav-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="7" height="7" rx="1"/>
+                    <rect x="14" y="3" width="7" height="7" rx="1"/>
+                    <rect x="3" y="14" width="7" height="7" rx="1"/>
+                    <rect x="14" y="14" width="7" height="7" rx="1"/>
+                </svg>
+            </span>
+            <span class="bottom-nav-label">Dashboard</span>
+        </button>
+
+        <button class="bottom-nav-item" data-tab="tab-control" onclick="switchTab('tab-control', this)">
+            <span class="bottom-nav-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+                </svg>
+            </span>
+            <span class="bottom-nav-label">Kontrol</span>
+        </button>
+
+        <button class="bottom-nav-item" data-tab="tab-log" onclick="switchTab('tab-log', this)">
+            <span class="bottom-nav-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                    <polyline points="10 9 9 9 8 9"/>
+                </svg>
+            </span>
+            <span class="bottom-nav-label">Log</span>
+        </button>
+
+        <button class="bottom-nav-item" data-tab="tab-config" onclick="switchTab('tab-config', this)">
+            <span class="bottom-nav-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+                </svg>
+            </span>
+            <span class="bottom-nav-label">Config</span>
+        </button>
+    </nav>
+    @endauth
 
     <script>
+        // ---- TAB SWITCHING ----
+        function switchTab(tabId, clickedEl) {
+            // Update all tab panels
+            document.querySelectorAll('.tab-panel').forEach(panel => {
+                panel.classList.toggle('tab-panel--active', panel.id === tabId);
+            });
+
+            // Update sidebar items
+            document.querySelectorAll('.sidebar-item').forEach(item => {
+                const isActive = item.dataset.tab === tabId;
+                item.classList.toggle('active', isActive);
+                item.setAttribute('aria-current', isActive ? 'page' : 'false');
+            });
+
+            // Update bottom nav items
+            document.querySelectorAll('.bottom-nav-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.tab === tabId);
+            });
+
+            // Persist active tab
+            localStorage.setItem('activeTab', tabId);
+        }
+
+        // Restore last active tab on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedTab = localStorage.getItem('activeTab') || 'tab-dashboard';
+            const targetPanel = document.getElementById(savedTab);
+            if (targetPanel) {
+                switchTab(savedTab, null);
+            }
+        });
+
+        // ---- THEME TOGGLE ----
         function toggleTheme() {
             const html = document.documentElement;
             const currentTheme = html.getAttribute('data-theme');
