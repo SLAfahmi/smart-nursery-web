@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="{{ asset('css/style.css') }}">
 </head>
 
-<body>
+<body class="@auth has-bottom-nav @endauth">
 
     <!-- ============ HEADER ============ -->
     <header class="app-header">
@@ -27,7 +27,7 @@
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                         <circle cx="12" cy="7" r="4"/>
                     </svg>
-                    <span>{{ Auth::user()->name }}</span>
+                    <span class="user-name" title="{{ Auth::user()->name }}">{{ Auth::user()->name }}</span>
                     <form action="{{ route('logout') }}" method="POST" style="display:inline;">
                         @csrf
                         <button type="submit" class="logout-btn" title="Logout">Logout</button>
@@ -47,13 +47,15 @@
                 </svg>
             </button>
             
-            <div class="live-badge">
+            @auth
+            <div class="live-badge offline" id="conn-badge" title="Status koneksi alat">
                 <div class="live-dot">
                     <div class="live-dot-ping"></div>
                     <div class="live-dot-inner"></div>
                 </div>
-                Live
+                <span id="conn-text">Memuat...</span>
             </div>
+            @endauth
         </div>
     </header>
 
@@ -64,7 +66,7 @@
         @auth
         <aside class="sidebar" id="sidebar" role="navigation" aria-label="Menu Utama">
             <nav class="sidebar-nav">
-                <button class="sidebar-item active" data-tab="tab-dashboard" onclick="switchTab('tab-dashboard', this)" aria-current="page">
+                <button class="sidebar-item active" data-tab="tab-dashboard" onclick="switchTab('tab-dashboard', this)" aria-current="page" aria-label="Dashboard" title="Dashboard">
                     <span class="sidebar-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <rect x="3" y="3" width="7" height="7" rx="1"/>
@@ -76,17 +78,19 @@
                     <span class="sidebar-label">Dashboard</span>
                 </button>
 
-                <button class="sidebar-item" data-tab="tab-control" onclick="switchTab('tab-control', this)">
+                <button class="sidebar-item" data-tab="tab-control" onclick="switchTab('tab-control', this)" aria-label="Kontrol" title="Kontrol">
                     <span class="sidebar-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="3"/>
-                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+                            <line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/>
+                            <line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/>
+                            <line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/>
+                            <line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>
                         </svg>
                     </span>
                     <span class="sidebar-label">Kontrol</span>
                 </button>
 
-                <button class="sidebar-item" data-tab="tab-log" onclick="switchTab('tab-log', this)">
+                <button class="sidebar-item" data-tab="tab-log" onclick="switchTab('tab-log', this)" aria-label="Log" title="Log">
                     <span class="sidebar-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -99,11 +103,11 @@
                     <span class="sidebar-label">Log</span>
                 </button>
 
-                <button class="sidebar-item" data-tab="tab-config" onclick="switchTab('tab-config', this)">
+                <button class="sidebar-item" data-tab="tab-config" onclick="switchTab('tab-config', this)" aria-label="Config" title="Config">
                     <span class="sidebar-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <circle cx="12" cy="12" r="3"/>
-                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
                         </svg>
                     </span>
                     <span class="sidebar-label">Config</span>
@@ -141,8 +145,10 @@
         <button class="bottom-nav-item" data-tab="tab-control" onclick="switchTab('tab-control', this)">
             <span class="bottom-nav-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="3"/>
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+                    <line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/>
+                    <line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/>
+                    <line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/>
+                    <line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>
                 </svg>
             </span>
             <span class="bottom-nav-label">Kontrol</span>
@@ -165,15 +171,29 @@
             <span class="bottom-nav-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="3"/>
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
                 </svg>
             </span>
             <span class="bottom-nav-label">Config</span>
         </button>
     </nav>
+
+    <!-- Notifikasi singkat (sama seperti dashboard lokal firmware). Di luar <main>:
+         container query di .main-content membuat position:fixed relatif ke main. -->
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
     @endauth
 
     <script>
+        // ---- TOAST ----
+        let toastTimer = null;
+        function toast(message, type = 'ok') {
+            const el = document.getElementById('toast');
+            el.textContent = message;
+            el.className = 'toast show ' + type;
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => { el.className = 'toast'; }, type === 'error' ? 5000 : 3000);
+        }
+
         // ---- TAB SWITCHING ----
         function switchTab(tabId, clickedEl) {
             // Update all tab panels

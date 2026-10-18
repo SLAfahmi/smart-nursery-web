@@ -4,74 +4,60 @@ namespace App\Http\Controllers;
 
 use App\Models\ActivityLog;
 use App\Models\DeviceControl;
+use App\Models\DeviceState;
 use App\Models\SensorLog;
-use App\Models\ZoneLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class DashboardController extends Controller
 {
+    private const MODE_NAMES = [0 => 'Auto (Fuzzy)', 1 => 'Manual', 2 => 'Schedule'];
+
     public function index()
     {
-        $deviceControl = DeviceControl::with('updatedBy')->where('device_key', 'NURSERY_01')->first();
-
-        if (!$deviceControl) {
-            $defaultSchedules = [];
-            for ($i = 0; $i < 5; $i++) {
-                $defaultSchedules[] = [
-                    'schedules' => [
-                        ['active' => false, 'hour' => 7, 'minute' => 0, 'duration' => 10],
-                        ['active' => false, 'hour' => 12, 'minute' => 0, 'duration' => 10],
-                        ['active' => false, 'hour' => 17, 'minute' => 0, 'duration' => 10],
-                    ]
-                ];
-            }
-
-            $deviceControl = DeviceControl::create([
-                'device_key' => 'NURSERY_01',
-                'system_mode' => 0,
-                'manual_mode_type' => 0,
-                'manual_duration' => 10,
-                'schedules_json' => $defaultSchedules,
-                'updated_by_user_id' => Auth::id(),
-            ]);
-        }
-
-        $latestSensor = SensorLog::with('zoneLogs')->latest()->first();
+        $deviceControl = DeviceControl::current()->load('updatedBy');
+        $latest = $this->latestSnapshot(DeviceState::where('device_key', DeviceControl::DEVICE_KEY)->first());
         $recentLogs = ActivityLog::with('user')->latest()->take(10)->get();
 
-        return view('dashboard', compact('deviceControl', 'latestSensor', 'recentLogs'));
+        return view('dashboard', compact('deviceControl', 'latest', 'recentLogs'));
     }
 
     public function getStatus(): JsonResponse
     {
-        $deviceControl = DeviceControl::with('updatedBy:id,name')->where('device_key', 'NURSERY_01')->first();
-        $latestSensor = SensorLog::with(['zoneLogs' => function($q) {
-            $q->orderBy('zone_id', 'asc');
-        }])->latest()->first();
+        $deviceControl = DeviceControl::current()->load('updatedBy:id,name');
+        $deviceState = DeviceState::where('device_key', DeviceControl::DEVICE_KEY)->first();
+        $latest = $this->latestSnapshot($deviceState);
 
         $recentLogs = ActivityLog::with('user:id,name')->latest()->take(10)->get();
 
         return response()->json([
             'status' => 'success',
             'device_control' => [
-                'system_mode' => $deviceControl ? $deviceControl->system_mode : 0,
-                'manual_mode_type' => $deviceControl ? $deviceControl->manual_mode_type : 0,
-                'manual_duration' => $deviceControl ? $deviceControl->manual_duration : 10,
-                'schedules' => $deviceControl ? $deviceControl->schedules_json : [],
-                'updated_by' => $deviceControl && $deviceControl->updatedBy ? $deviceControl->updatedBy->name : 'System',
-                'updated_at' => $deviceControl && $deviceControl->updated_at ? $deviceControl->updated_at->diffForHumans() : 'Belum pernah',
-                'updated_at_exact' => $deviceControl && $deviceControl->updated_at ? $deviceControl->updated_at->format('d M Y, H:i T') : '-',
+                'system_mode' => $deviceControl->system_mode,
+                'manual_mode_type' => $deviceControl->manual_mode_type,
+                'manual_duration' => $deviceControl->manual_duration,
+                'schedules' => $deviceControl->schedules_json,
+                'sys_config' => $deviceControl->sysConfig(),
+                'pending_relays' => (object) $deviceControl->pendingRelayStates(),
+                'updated_by' => $deviceControl->updatedBy ? $deviceControl->updatedBy->name : 'System',
+                'updated_at' => $deviceControl->updated_at ? $deviceControl->updated_at->diffForHumans() : 'Belum pernah',
+                'updated_at_exact' => $deviceControl->updated_at ? $deviceControl->updated_at->format('d M Y, H:i T') : '-',
             ],
-            'latest_sensor' => $latestSensor ? [
-                'temperature' => $latestSensor->temperature,
-                'humidity' => $latestSensor->humidity,
-                'light_level' => $latestSensor->light_level,
-                'system_mode' => $latestSensor->system_mode,
-                'recorded_at' => $latestSensor->recorded_at ? $latestSensor->recorded_at->format('H:i:s') : $latestSensor->created_at->format('H:i:s'),
-                'zones' => $latestSensor->zoneLogs,
-            ] : null,
+            'device' => [
+                'online' => $deviceState?->isOnline() ?? false,
+                'last_seen' => $deviceState?->last_seen_at?->diffForHumans(),
+                // null = firmware belum melaporkan versi (firmware lama)
+                'synced' => $deviceState?->reported_version === null
+                    ? null
+                    : $deviceState->reported_version === $deviceControl->command_version,
+                'clock' => $deviceState?->clockStatus(),
+            ],
+            'latest_sensor' => $latest
+                ? array_merge($latest, ['recorded_at' => Carbon::parse($latest['recorded_at'])->format('d/m H:i:s')])
+                : null,
             'recent_logs' => $recentLogs->map(function ($log) {
                 return [
                     'id' => $log->id,
@@ -93,11 +79,7 @@ class DashboardController extends Controller
         ]);
 
         $user = Auth::user();
-        $deviceControl = DeviceControl::where('device_key', 'NURSERY_01')->first();
-
-        if (!$deviceControl) {
-            $deviceControl = new DeviceControl(['device_key' => 'NURSERY_01']);
-        }
+        $deviceControl = DeviceControl::current();
 
         $oldMode = $deviceControl->system_mode;
         $deviceControl->system_mode = $validated['system_mode'];
@@ -109,11 +91,15 @@ class DashboardController extends Controller
             $deviceControl->manual_duration = $validated['manual_duration'];
         }
 
-        $deviceControl->updated_by_user_id = $user->id;
+        // Firmware mematikan semua relay saat mode berganti, jadi perintah relay lama tidak berlaku
+        if ($oldMode !== $deviceControl->system_mode) {
+            $deviceControl->pending_relays = null;
+        }
+
+        $deviceControl->markChangedBy($user);
         $deviceControl->save();
 
-        $modeNames = [0 => 'Auto (Fuzzy)', 1 => 'Manual', 2 => 'Schedule'];
-        $newModeName = $modeNames[$validated['system_mode']] ?? 'Unknown';
+        $newModeName = self::MODE_NAMES[$validated['system_mode']] ?? 'Unknown';
 
         ActivityLog::create([
             'user_id' => $user->id,
@@ -134,37 +120,44 @@ class DashboardController extends Controller
         ]);
     }
 
+    /**
+     * Perintah relay dikirim ke alat pada balasan telemetry berikutnya (≤ 5 detik).
+     * Firmware hanya menerima perintah relay pada mode Manual.
+     */
     public function toggleRelay(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'zone_id' => 'required|integer|min:1|max:5',
-            'relay_status' => 'required|boolean',
+            'relay' => ['required', Rule::in(array_merge(['main'], range(1, config('nursery.zones'))))],
+            'on' => 'required|boolean',
         ]);
 
         $user = Auth::user();
-        $deviceControl = DeviceControl::where('device_key', 'NURSERY_01')->first();
+        $deviceControl = DeviceControl::current();
 
-        if ($deviceControl) {
-            $deviceControl->updated_by_user_id = $user->id;
-            $deviceControl->save();
+        if ($deviceControl->system_mode !== 1) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Relay hanya bisa dikontrol pada mode Manual.',
+            ], 409);
         }
 
-        $actionStr = $validated['relay_status']
-            ? "Menyalakan Valve Relay Zona {$validated['zone_id']}"
-            : "Mematikan Valve Relay Zona {$validated['zone_id']}";
+        $relay = $validated['relay'] === 'main' ? 'main' : (int) $validated['relay'];
+        $on = (bool) $validated['on'];
 
+        $deviceControl->queueRelay($relay, $on);
+        $deviceControl->updated_by_user_id = $user->id;
+        $deviceControl->save();
+
+        $target = $relay === 'main' ? 'Pompa Utama' : "Valve Relay Zona {$relay}";
         ActivityLog::create([
             'user_id' => $user->id,
-            'action' => $actionStr,
-            'details_json' => [
-                'zone_id' => $validated['zone_id'],
-                'relay_status' => $validated['relay_status'],
-            ],
+            'action' => ($on ? 'Menyalakan ' : 'Mematikan ') . $target,
+            'details_json' => ['relay' => $relay, 'on' => $on],
         ]);
 
         return response()->json([
             'status' => 'success',
-            'message' => "Aksi berhasil dikirim oleh {$user->name}",
+            'message' => "Perintah dikirim ke alat oleh {$user->name}",
             'updated_by' => $user->name,
             'updated_at' => now()->format('d M Y, H:i T'),
         ]);
@@ -172,19 +165,26 @@ class DashboardController extends Controller
 
     public function saveSchedule(Request $request): JsonResponse
     {
+        // Format & rentang sama dengan firmware (settings_store.cpp: scheduleFromJson).
+        // Firmware menolak seluruh jadwal jika ada satu nilai di luar rentang.
+        $zones = config('nursery.zones');
         $validated = $request->validate([
-            'schedules' => 'required|array|size:5',
+            'schedules' => "required|array|size:{$zones}",
+            'schedules.*.zone' => "required|integer|distinct|min:1|max:{$zones}",
+            'schedules.*.slots' => 'required|array|size:' . config('nursery.schedule_slots'),
+            'schedules.*.slots.*.active' => 'required|boolean',
+            'schedules.*.slots.*.hour' => 'nullable|required_if:schedules.*.slots.*.active,true|integer|min:0|max:23',
+            'schedules.*.slots.*.minute' => 'nullable|required_if:schedules.*.slots.*.active,true|integer|min:0|max:59',
+            'schedules.*.slots.*.duration' => 'nullable|required_if:schedules.*.slots.*.active,true|integer|min:1|max:3600',
+        ], [
+            'schedules.*.slots.*.*.required_if' => 'Jam dan durasi wajib diisi untuk jadwal yang aktif.',
         ]);
 
         $user = Auth::user();
-        $deviceControl = DeviceControl::where('device_key', 'NURSERY_01')->first();
-
-        if (!$deviceControl) {
-            $deviceControl = new DeviceControl(['device_key' => 'NURSERY_01']);
-        }
+        $deviceControl = DeviceControl::current();
 
         $deviceControl->schedules_json = $validated['schedules'];
-        $deviceControl->updated_by_user_id = $user->id;
+        $deviceControl->markChangedBy($user);
         $deviceControl->save();
 
         ActivityLog::create([
@@ -201,120 +201,100 @@ class DashboardController extends Controller
         ]);
     }
 
-    // ── Fuzzy Config ──────────────────────────────────────────
-    public function getFuzzyConfig(): JsonResponse
-    {
-        $deviceControl = DeviceControl::where('device_key', 'NURSERY_01')->first();
-        $fuzzy = $deviceControl ? ($deviceControl->fuzzy_config ?? []) : [];
-        return response()->json(array_merge($this->defaultFuzzy(), $fuzzy));
-    }
-
-    public function saveFuzzyConfig(Request $request): JsonResponse
-    {
-        $user = Auth::user();
-        $deviceControl = DeviceControl::where('device_key', 'NURSERY_01')->first();
-        if (!$deviceControl) {
-            $deviceControl = new DeviceControl(['device_key' => 'NURSERY_01']);
-        }
-        $deviceControl->fuzzy_config = $request->all();
-        $deviceControl->updated_by_user_id = $user->id;
-        $deviceControl->save();
-
-        ActivityLog::create([
-            'user_id' => $user->id,
-            'action' => "Memperbarui Konfigurasi Parameter Fuzzy",
-        ]);
-
-        return response()->json(['status' => 'success']);
-    }
-
-    public function resetFuzzyConfig(): JsonResponse
-    {
-        $user = Auth::user();
-        $deviceControl = DeviceControl::where('device_key', 'NURSERY_01')->first();
-        if ($deviceControl) {
-            $deviceControl->fuzzy_config = $this->defaultFuzzy();
-            $deviceControl->updated_by_user_id = $user->id;
-            $deviceControl->save();
-        }
-
-        ActivityLog::create([
-            'user_id' => $user->id,
-            'action' => "Reset Parameter Fuzzy ke Nilai Default",
-        ]);
-
-        return response()->json(['status' => 'success']);
-    }
-
-    private function defaultFuzzy(): array
-    {
-        return [
-            'basahMax' => 30, 'basahMin' => 50,
-            'lembabLow' => 30, 'lembabMid' => 55, 'lembabHigh' => 80,
-            'keringLow' => 60, 'keringMax' => 80,
-            'dinginMax' => 20, 'dinginMin' => 25,
-            'normalLow' => 22, 'normalMid' => 27, 'normalHigh' => 32,
-            'panasLow' => 30, 'panasMax' => 35,
-            'redupMax' => 5000, 'redupMin' => 25000,
-            'sedangLow' => 5000, 'sedangMid' => 35000, 'sedangHigh' => 65000,
-            'terangLow' => 45000, 'terangMax' => 65000,
-            'pendekMax' => 10, 'sedangOutMax' => 20, 'defuzzMax' => 30,
-        ];
-    }
-
     // ── Sys Config ────────────────────────────────────────────
     public function saveSysConfig(Request $request): JsonResponse
     {
+        // Rentang sama dengan firmware (settings_store.cpp: settingsFromJson)
         $validated = $request->validate([
-            'sensor_interval' => 'nullable|integer|min:1|max:3600',
-            'log_interval'    => 'nullable|integer',
-            'cooldown'        => 'nullable|integer',
+            'sensor_interval' => 'required|integer|min:2|max:3600',
+            'log_interval'    => 'required|integer|min:60|max:86400',
+            'cooldown'        => 'required|integer|min:0|max:86400',
         ]);
 
         $user = Auth::user();
-        $deviceControl = DeviceControl::where('device_key', 'NURSERY_01')->first();
-        if (!$deviceControl) {
-            $deviceControl = new DeviceControl(['device_key' => 'NURSERY_01']);
-        }
+        $deviceControl = DeviceControl::current();
+
         $deviceControl->sys_config = $validated;
-        $deviceControl->updated_by_user_id = $user->id;
+        $deviceControl->markChangedBy($user);
         $deviceControl->save();
 
         ActivityLog::create([
             'user_id' => $user->id,
             'action' => "Memperbarui Konfigurasi Sistem (Interval/Cooldown)",
+            'details_json' => $validated,
         ]);
 
         return response()->json(['status' => 'success']);
     }
 
     // ── Export CSV ────────────────────────────────────────────
-    public function exportCsv()
+    /**
+     * Per hari: ?date=2026-10-11 (default hari ini).
+     * Rentang:  ?from=2026-10-01&to=2026-10-11
+     * Diurutkan berdasarkan waktu rekam alat (recorded_at), termasuk data dari buffer offline.
+     */
+    public function exportCsv(Request $request)
     {
-        $logs = SensorLog::with(['zoneLogs' => fn($q) => $q->orderBy('zone_id')])
-            ->latest()->take(100)->get();
+        $validated = $request->validate([
+            'date' => 'nullable|date_format:Y-m-d',
+            'from' => 'nullable|date_format:Y-m-d|required_with:to',
+            'to' => 'nullable|date_format:Y-m-d|after_or_equal:from',
+        ]);
 
-        $headers = [
-            'Content-Type'        => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="smart_nursery_log.csv"',
-        ];
+        if (isset($validated['from'])) {
+            $from = Carbon::parse($validated['from'])->startOfDay();
+            $to = Carbon::parse($validated['to'] ?? $validated['from'])->endOfDay();
+        } else {
+            $from = Carbon::parse($validated['date'] ?? now())->startOfDay();
+            $to = $from->copy()->endOfDay();
+        }
 
-        $callback = function () use ($logs) {
+        $filename = $from->isSameDay($to)
+            ? "smart_nursery_log_{$from->toDateString()}.csv"
+            : "smart_nursery_log_{$from->toDateString()}_sd_{$to->toDateString()}.csv";
+        $zoneCount = config('nursery.zones');
+
+        $callback = function () use ($from, $to, $zoneCount) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Waktu', 'Suhu (°C)', 'Lembab (%)', 'Cahaya (lx)',
-                'Zona1-Tanah%', 'Zona2-Tanah%', 'Zona3-Tanah%', 'Zona4-Tanah%', 'Zona5-Tanah%', 'Mode']);
-            foreach ($logs as $log) {
-                $zones = $log->zoneLogs->pluck('soil_moisture')->toArray();
-                while (count($zones) < 5) { $zones[] = '-'; }
-                fputcsv($handle, array_merge([
-                    $log->created_at->format('d/m/Y H:i:s'),
-                    $log->temperature, $log->humidity, $log->light_level,
-                ], $zones, [$log->system_mode ?? 0]));
+            fwrite($handle, "\xEF\xBB\xBF");   // BOM agar Excel membaca UTF-8 (simbol °)
+
+            $header = ['Waktu', 'Suhu (°C)', 'Kelembaban Udara (%)', 'Cahaya (lx)'];
+            foreach (range(1, $zoneCount) as $zone) {
+                array_push($header, "Zona {$zone} Tanah (%)", "Zona {$zone} Valve", "Zona {$zone} Status");
             }
+            fputcsv($handle, array_merge($header, ['Pompa', 'Mode', 'Sumber']));
+
+            // Ditulis per 500 baris agar memori tetap kecil walau rentangnya panjang
+            SensorLog::with('zoneLogs')
+                ->whereBetween('recorded_at', [$from, $to])
+                ->orderBy('recorded_at')->orderBy('id')
+                ->chunk(500, function ($logs) use ($handle, $zoneCount) {
+                    foreach ($logs as $log) {
+                        $row = [
+                            $log->recorded_at?->format('Y-m-d H:i:s'),
+                            $log->temperature ?? '', $log->humidity ?? '', $log->light_level ?? '',
+                        ];
+                        $zones = $log->zoneLogs->keyBy('zone_id');
+                        foreach (range(1, $zoneCount) as $zone) {
+                            $z = $zones->get($zone);
+                            array_push($row, $z?->soil_moisture ?? '', $z ? ($z->relay_status ? 'ON' : 'OFF') : '', $z?->state ?? '');
+                        }
+                        array_push($row,
+                            $log->relay_main ? 'ON' : 'OFF',
+                            self::MODE_NAMES[$log->system_mode] ?? $log->system_mode,
+                            $log->is_offline_data ? 'Offline' : 'Live',
+                        );
+                        fputcsv($handle, $row);
+                    }
+                });
+
             fclose($handle);
         };
 
-        return response()->stream($callback, 200, $headers);
+        return response()->stream($callback, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ]);
     }
 
     // ── Reset Log ─────────────────────────────────────────────
@@ -329,5 +309,22 @@ class DashboardController extends Controller
         ]);
 
         return response()->json(['status' => 'success']);
+    }
+
+    /**
+     * Data live terakhir dari alat. Sebelum ada telemetry baru (mis. tepat setelah
+     * deploy), pakai riwayat live terakhir; data batch offline tidak dipakai karena lama.
+     */
+    private function latestSnapshot(?DeviceState $deviceState): ?array
+    {
+        if ($deviceState?->state) {
+            return $deviceState->state;
+        }
+
+        return SensorLog::with('zoneLogs')
+            ->where('is_offline_data', false)
+            ->latest('id')
+            ->first()
+            ?->toSnapshot();
     }
 }

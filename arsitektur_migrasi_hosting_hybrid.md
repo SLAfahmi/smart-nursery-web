@@ -1,64 +1,67 @@
-# Panduan Migrasi Architecture & Sistem Hybrid Smart Oil Palm Nursery (Revisi v4)
+# Arsitektur Sistem Hybrid Smart Oil Palm Nursery (Revisi v5)
 
-Dokumen ini berisi spesifikasi sistem **Smart Oil Palm Nursery** berbasis **Hybrid Cloud Hosting & Database (Laravel + MySQL)** yang dilengkapi fitur **Login Pengguna, Audit Log (Pencatatan Aksi User Terakhir), & Offline Storage Buffer**.
+Spesifikasi sistem **Smart Oil Palm Nursery**: ESP32-S3 yang tetap bekerja mandiri, ditambah web **Laravel + MySQL** di hosting untuk monitoring, kontrol jarak jauh, audit user, dan riwayat data.
+
+> **Revisi v5 (18 Oktober 2026):** disesuaikan dengan kode akhir. Jumlah zona 3, struktur tabel setelah migration Oktober 2026, sinkronisasi dua arah berbasis `command_version`, registrasi publik ditutup. Detail format JSON ada di [RINGKASAN_DAN_REVISI.md bagian 6](RINGKASAN_DAN_REVISI.md#6-kontrak-data-firmware--web).
 
 ---
 
-## 1. Fitur Utama: Login & Tracking User (Siapa yang Mengubah Aksi)
-
-Sesuai kebutuhan Anda, sistem menggunakan **Fitur Login & User Audit Trail**:
+## 1. Login & Audit User
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                       SISTEM AKSEK & AUDIT USER                             │
+│                         SISTEM AKSES & AUDIT USER                           │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ 1. LOGIN PENGGUNA:                                                          │
-│    Setiap operator/admin harus Login dengan Email & Password masing-masing. │
+│    Setiap operator/admin login dengan email & password masing-masing.       │
+│    Registrasi publik ditutup; akun dibuat admin (php artisan nursery:user). │
 │                                                                             │
 │ 2. PENCATATAN AKSI (AUDIT TRAIL):                                           │
-│    Ketika User A (misal: "Budi") mengubah mode ke Manual / menekan tombol   │
-│    Relay, Laravel otomatis menyimpan ID & Nama User tersebut.              │
+│    Saat user mengubah mode, jadwal, config, atau menekan relay, Laravel     │
+│    menyimpan ID user dan detail perubahan di activity_logs.                 │
 │                                                                             │
 │ 3. INFORMASI DI DASHBOARD:                                                  │
-│    Dashboard akan menampilkan informasi realtime:                           │
 │    "Mode diubah ke Manual oleh: Budi (30 Jul 2026, 14:10 WIB)"              │
+│    Perubahan dari dashboard lokal alat tampil sebagai "oleh System".        │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. Acuan Desain UI / UX Dashboard (Diadopsi dari `data/index.html` & `data/style.css`)
+## 2. Tampilan Dashboard Web
 
-Tampilan Web Dashboard Laravel (Repo 2) menggunakan tema modern yang sama dengan file lokal [data/index.html](file:///c:/HOSTING_SMART%20NURSERY_TELU/Smart-Oil-Palm-Nursery-Using-Fuzzy-Logic-and-RTOS-/data/index.html) & [data/style.css](file:///c:/HOSTING_SMART%20NURSERY_TELU/Smart-Oil-Palm-Nursery-Using-Fuzzy-Logic-and-RTOS-/data/style.css), ditambah komponen informasi User:
+Tema mengikuti dashboard lokal firmware (`data/www/index.html` & `style.css` di repo firmware), ditambah informasi user dan status alat.
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ [Icon] Smart Nursery                [Pengguna: Budi (Logout)] [● Live]  │
+│ [Icon] Smart Nursery        [Budi (Logout)] [● Alat Online / Offline]   │
 ├─────────────────────────────────────────────────────────────────────────┤
-│ Selamat Datang - Smart Nursery (Monitoring & Irigasi Otomatis)          │
+│ Tab: Dashboard | Kontrol | Log | Config                                 │
 ├─────────────────────────────────────────────────────────────────────────┤
 │ Kondisi Lingkungan:                                                     │
 │ ┌───────────────┐ ┌───────────────┐ ┌───────────────┐ ┌───────────────┐ │
-│ │ Suhu (°C)     │ │ Cahaya (Lux)  │ │ Lembab Udara  │ │ Lembab Tanah  │ │
+│ │ Suhu (°C)     │ │ Cahaya (Lux)  │ │ Lembab Udara  │ │ Rata2 Tanah   │ │
 │ └───────────────┘ └───────────────┘ └───────────────┘ └───────────────┘ │
+│ Pompa utama: ON/OFF          ⚠ Peringatan sensor error (jika ada)       │
 ├─────────────────────────────────────────────────────────────────────────┤
-│ Sistem Irigasi:                                                         │
-│ Mode Badge: [ MANUAL ]                     Dropdown Mode: [ Manual ]    │
-│ ℹ Terakhir Diubah Oleh: Budi pada 14:10 WIB                             │
-│ ── [ Dynamic Settings: Timer Manual / Form Schedule (Max 3 Zona) ] ─── │
+│ Zona 1..3: kelembaban tanah, valve, status (idle/antre/menyiram/jeda),  │
+│            durasi fuzzy terakhir                                        │
 ├─────────────────────────────────────────────────────────────────────────┤
-│ Sub-Blok / Zona (5 Total Card Zona dengan Nilai Soil & Toggle Relay)    │
+│ Kontrol: Mode [Auto|Manual|Schedule], setelan manual, jadwal 3 slot,    │
+│          tombol relay (hanya Manual), "✓ Tersinkron dengan alat"        │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+Nilai sensor yang error / tidak terpasang tampil `--`. Status online dihitung dari telemetry terakhir (offline jika lebih dari 20 detik).
+
 ---
 
-## 3. Konsep Utama Sistem Hybrid (Resilience Mode)
+## 3. Konsep Hybrid (Resilience Mode)
 
 ```text
                   ┌─────────────────────────────────────────┐
-                  │          ESP32 Controller               │
-                  │ (Fuzzy, Schedule, Manual & RTC Lokal)   │
+                  │          ESP32-S3 Controller            │
+                  │ (Fuzzy, Schedule, Manual & RTC DS3231)  │
                   └────────────────────┬────────────────────┘
                                        │
                   ┌────────────────────┴────────────────────┐
@@ -71,101 +74,113 @@ Tampilan Web Dashboard Laravel (Repo 2) menggunakan tema modern yang sama dengan
            ┌───────────────────────────┐ ┌───────────────────────────┐
            │    SINKRONISASI CLOUD     │ │      STANDALONE MODE      │
            ├───────────────────────────┤ ├───────────────────────────┤
-           │ 1. Kirim data sensor live │ │ 1. ESP32 BERJALAN SESUAI  │
-           │    ke Laravel MySQL DB.   │ │    MODE TERAKHIR USER     │
-           │ 2. Kirim DATA BUFFER      │ │    (Auto Fuzzy / Manual / │
-           │    offline dari Flash.    │ │    Schedule).             │
-           │ 3. Terima perintah baru   │ │ 2. Simpan data log baru   │
-           │    dari Web Dashboard.    │ │    ke Buffer Flash.       │
-           └───────────────────────────┘ └───────────────────────────┘
+           │ 1. POST telemetry tiap 5s │ │ 1. Tetap berjalan sesuai  │
+           │ 2. Kirim buffer offline   │ │    mode & jadwal terakhir │
+           │    (sync-batch).          │ │ 2. Snapshot tiap 30 detik │
+           │ 3. Terapkan device_command│ │    ke buffer LittleFS     │
+           │    dari balasan server.   │ │    (maks. 50 data).       │
+           │ 4. Sinkron jam NTP → RTC. │ │ 3. Dashboard lokal AP     │
+           └───────────────────────────┘ │    tetap bisa dipakai.    │
+                                         └───────────────────────────┘
 ```
 
+### Sinkronisasi dua arah
+
+```text
+Web ubah mode/jadwal/config ──▶ device_controls.command_version + 1
+                                        │
+ESP32 POST telemetry (command_version = versi yang sudah diterapkan)
+                                        │
+          versi alat ≠ versi web ──▶ balasan berisi device_command lengkap
+          versi alat = versi web ──▶ config/jadwal dari alat disalin ke web
+                                     (perubahan dari dashboard lokal ikut tampil)
+```
+
+Perintah relay dikirim sekali lewat `device_command.relays` dan kedaluwarsa setelah 30 detik.
+
 ---
 
-## 4. Rancangan Database MySQL (Dengan User Tracking & Audit Logs)
+## 4. Rancangan Database MySQL
 
-### A. Tabel `users` (Data Akun Login)
+### A. `users`
 | Column | Type | Description |
 | :--- | :--- | :--- |
-| `id` | BigInt (PK) | ID User |
-| `name` | String | Nama Lengkap User (misal: "Budi", "Andi") |
-| `email` | String (Unique)| Email Login |
-| `password` | String | Password Hash |
+| `id` | BigInt (PK) | ID user |
+| `name` | String | Nama tampilan |
+| `email` | String (unique) | Email login |
+| `password` | String | Password hash |
 
-### B. Tabel `device_controls` (Mode & Perintah Terkini)
+### B. `device_controls` (konfigurasi yang diinginkan web)
 | Column | Type | Description |
 | :--- | :--- | :--- |
-| `id` | BigInt (PK) | ID Control |
-| `device_key` | String | Token Unik ESP32 (misal `"NURSERY_01"`) |
-| `system_mode` | TinyInt | Mode Terpilih: `0`=Auto Fuzzy, `1`=Manual, `2`=Schedule |
-| `manual_mode_type` | TinyInt | `0`=Toggle Direct, `1`=Timer |
-| `manual_duration` | Int | Durasi Timer Manual (detik) |
-| `schedules_json` | JSON | Konfigurasi Jadwal Penyiraman per Zona |
-| `updated_by_user_id`| BigInt (FK) | Relasi ke `users.id` (User yang terakhir mengubah) |
-| `updated_at` | Timestamp | Waktu Perubahan Terakhir oleh User |
+| `device_key` | String (unique) | `NURSERY_01` |
+| `system_mode` | TinyInt | `0`=Auto Fuzzy, `1`=Manual, `2`=Schedule |
+| `manual_mode_type` | TinyInt | `0`=Toggle, `1`=Timer |
+| `manual_duration` | Int | Durasi timer manual (detik) |
+| `schedules_json` | JSON | `[{"zone":1,"slots":[{"active","hour","minute","duration"} ×3]}, ...]` |
+| `sys_config` | JSON | `sensor_interval`, `log_interval`, `cooldown` |
+| `command_version` | UInt | Naik setiap konfigurasi diubah dari web |
+| `pending_relays` | JSON | Perintah relay yang belum terkirim (kedaluwarsa 30 detik) |
+| `updated_by_user_id` | BigInt (FK) | User terakhir yang mengubah (`null` = System) |
+| `updated_at` | Timestamp | Waktu perubahan terakhir |
 
-### C. Tabel `activity_logs` (Histori Semua Aksi User)
-Catatan riwayat setiap kali user mengubah mode atau menekan tombol relay.
+### C. `device_states` (kondisi yang dilaporkan alat)
 | Column | Type | Description |
 | :--- | :--- | :--- |
-| `id` | BigInt (PK) | ID Activity Log |
+| `device_key` | String (unique) | `NURSERY_01` |
+| `reported_version` | UInt (nullable) | `command_version` yang sudah diterapkan alat |
+| `last_seen_at` | Timestamp | Telemetry live terakhir (dasar status online) |
+| `state` | JSON | Telemetry live terakhir, untuk kartu "kondisi terkini" |
+
+### D. `activity_logs`
+| Column | Type | Description |
+| :--- | :--- | :--- |
 | `user_id` | BigInt (FK) | Relasi ke `users.id` |
-| `action` | String | Deskripsi aksi (misal: "Mengubah Mode ke Manual", "Menyalakan Valve Zona 1") |
-| `details_json` | JSON | Detail data sebelum & sesudah diubah |
-| `created_at` | Timestamp | Waktu Aksi Dilakukan |
+| `action` | String | Mis. "Mengubah Mode ke Manual", "Menyalakan Valve Zona 1" |
+| `details_json` | JSON | Detail sebelum & sesudah |
+| `created_at` | Timestamp | Waktu aksi |
 
-### D. Tabel `sensor_logs` (Data Sensor dari ESP32)
+### E. `sensor_logs` (riwayat)
+Disimpan tiap `NURSERY_HISTORY_INTERVAL` (60 detik) atau saat relay/status zona/mode berubah. Data batch offline selalu disimpan. Dihapus otomatis setelah 90 hari (`model:prune`).
+
 | Column | Type | Description |
 | :--- | :--- | :--- |
-| `id` | BigInt (PK) | ID Log |
-| `temperature` | Float | Suhu Udara (°C) |
-| `humidity` | Float | Kelembaban Udara (%) |
-| `light_level` | Int | Intensitas Cahaya (Lux) |
-| `system_mode` | TinyInt | Mode aktif saat dicatat (`0`=Auto, `1`=Manual, `2`=Schedule) |
-| `is_offline_data` | Boolean | `true` jika dikirim dari buffer offline ESP32 |
-| `recorded_at` | Timestamp | Waktu dicatat (RTC DS3231 ESP32) |
+| `device_key` | String | `NURSERY_01` |
+| `temperature` | Float (nullable) | Suhu udara (°C), `null` jika DHT22 error |
+| `humidity` | Float (nullable) | Kelembaban udara (%) |
+| `light_level` | Float (nullable) | Cahaya (lux), `null` jika BH1750 error |
+| `system_mode` | TinyInt | Mode aktif saat dicatat |
+| `relay_main` | Boolean | Status pompa utama |
+| `is_offline_data` | Boolean | `true` jika dari buffer offline |
+| `recorded_at` | Timestamp | Waktu alat (WIB); waktu terima jika jam alat belum valid |
 | `created_at` | Timestamp | Waktu masuk server |
 
-### E. Tabel `zone_logs` (Data 5 Zona Pembibitan)
+### F. `zone_logs` (3 zona per `sensor_logs`)
 | Column | Type | Description |
 | :--- | :--- | :--- |
-| `id` | BigInt (PK) | ID Log Zona |
 | `sensor_log_id` | BigInt (FK) | Relasi ke `sensor_logs.id` |
-| `zone_id` | TinyInt | Nomor Zona (1 - 5) |
-| `soil_moisture` | Int | Kelembaban Tanah (%) |
-| `zone_mode` | TinyInt | Mode Zona saat itu |
-| `duration` | Int | Durasi Penyiraman (Detik) |
-| `relay_status` | Boolean | Status Relay Valve (ON/OFF) |
+| `zone_id` | TinyInt | Nomor zona (1–3) |
+| `soil_moisture` | Float (nullable) | Kelembaban tanah (%), `null` jika sensor tidak terpasang |
+| `relay_status` | Boolean | Status valve |
+| `state` | String | `idle`, `queued`, `watering`, `soaking` |
+| `fuzzy_duration` | Float | Rekomendasi fuzzy terakhir (detik) |
 
 ---
 
-## 5. Struktur Repository Git (Dua Repo Terpisah)
+## 5. Struktur Repository
 
-1. **Repo 1: `smart-nursery-firmware` (PlatformIO ESP32)**
-   * Berisi kode C++ PlatformIO ESP32 dengan fungsi pengiriman HTTP POST, penyimpan buffer LittleFS saat offline, & eksekusi Fuzzy/Schedule/Manual.
-2. **Repo 2: `smart-nursery-web` (Laravel Web Application)**
-   * Berisi proyek Laravel dengan Halaman Login, Dashboard UI/UX, Tracking User (`activity_logs`), & REST API Receiver.
+1. **Firmware** (`C:\HOSTING_SMART_NURSERY_FIRMWARE_TA`, PlatformIO ESP32-S3): task FreeRTOS, fuzzy Mamdani, dashboard lokal AP, `CloudSyncTask` (telemetry HTTPS, buffer LittleFS, NTP).
+2. **Web** (repo ini, Laravel): login, dashboard, audit user, REST API untuk ESP32. Lihat [README.md](README.md).
 
 ---
 
-## 6. Tahapan Langkah Eksekusi (Roadmap Implementation)
+## 6. Status Implementasi
 
-1. **Langkah 1: Inisialisasi Project Laravel (Repo 2) & Auth System**
-   * Buat repo & project Laravel `smart-nursery-web`.
-   * Install Laravel Breeze/Fortify untuk fitur **Login, Register, & Profile User**.
-   * Buat migration database MySQL (`users`, `device_controls`, `activity_logs`, `sensor_logs`, `zone_logs`).
-   * Adaptasi UI/UX dari `data/index.html` & `data/style.css` ke Blade View dengan tambahan informasi *"Terakhir diubah oleh [User]"*.
-
-2. **Langkah 2: Pembuatan REST API Laravel**
-   * `POST /api/v1/telemetry` (Menerima data sensor live dari ESP32).
-   * `POST /api/v1/telemetry/sync-batch` (Menerima log offline buffer dari ESP32).
-   * `GET /api/v1/device-command` (Memberikan status mode ke ESP32).
-
-3. **Langkah 3: Pembaruan Firmware PlatformIO ESP32 (Repo 1)**
-   * Tambahkan pengiriman data HTTP POST ke Laravel Cloud.
-   * Buat modul buffer penyimpanan offline LittleFS saat Wi-Fi putus.
-
-4. **Langkah 4: Deploy ke Cloud Hosting & Testing**
-   * Deploy Laravel ke Cloud Hosting dengan SSL HTTPS.
-   * Uji coba login dengan 2 akun user berbeda (misal Admin & Budi).
-   * Uji coba Budi mengubah mode, lalu cek di dashboard apakah tercatat *"Diubah oleh Budi"*.
+| Langkah | Isi | Status |
+|---|---|---|
+| 1 | Project Laravel, login, migration, dashboard Blade | ✅ |
+| 2 | REST API `telemetry`, `sync-batch`, `device-command` dengan `X-Device-Token` | ✅ |
+| 3 | Firmware: kirim telemetry, buffer offline, terapkan `device_command` | ✅ |
+| 4 | Sinkronisasi dua arah, relay dari web, riwayat hemat, export CSV | ✅ |
+| 5 | Deploy ke hosting HTTPS dan uji dengan dua akun (Admin & Budi) | Manual, lihat [README.md § Deploy](README.md#deploy-ke-hosting) |
+| 6 | MQTT (opsional, menggantikan polling HTTP) | Ditunda, lihat [PERSIAPAN_MQTT.md](PERSIAPAN_MQTT.md) |

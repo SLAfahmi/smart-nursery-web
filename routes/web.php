@@ -12,9 +12,10 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
-    Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
+    // Hanya aktif jika ALLOW_REGISTRATION=true (dicek di AuthController)
     Route::get('/register', [AuthController::class, 'showRegisterForm'])->name('register');
-    Route::post('/register', [AuthController::class, 'register']);
+    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
 });
 
 Route::middleware('auth')->group(function () {
@@ -28,10 +29,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/toggle-relay', [DashboardController::class, 'toggleRelay'])->name('dashboard.toggle-relay');
     Route::post('/api/save-schedule', [DashboardController::class, 'saveSchedule'])->name('dashboard.save-schedule');
 
-    // Config routes
-    Route::get('/api/fuzzy-config', [DashboardController::class, 'getFuzzyConfig'])->name('dashboard.fuzzy-config');
-    Route::post('/api/fuzzy-config', [DashboardController::class, 'saveFuzzyConfig'])->name('dashboard.fuzzy-config.save');
-    Route::post('/api/fuzzy-config/reset', [DashboardController::class, 'resetFuzzyConfig'])->name('dashboard.fuzzy-config.reset');
+    // Config routes (tab Config, mengikuti halaman Config dashboard lokal firmware)
     Route::post('/api/sys-config', [DashboardController::class, 'saveSysConfig'])->name('dashboard.sys-config');
     Route::get('/api/export-csv', [DashboardController::class, 'exportCsv'])->name('dashboard.export-csv');
     Route::post('/api/reset-log', [DashboardController::class, 'resetLog'])->name('dashboard.reset-log');

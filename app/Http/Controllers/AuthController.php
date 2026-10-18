@@ -45,6 +45,8 @@ class AuthController extends Controller
 
     public function showRegisterForm()
     {
+        abort_unless(config('nursery.allow_registration'), 404);
+
         if (Auth::check()) {
             return redirect()->route('dashboard');
         }
@@ -53,6 +55,8 @@ class AuthController extends Controller
 
     public function register(Request $request)
     {
+        abort_unless(config('nursery.allow_registration'), 404);
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],

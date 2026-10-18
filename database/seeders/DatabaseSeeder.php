@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\DeviceControl;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class DatabaseSeeder extends Seeder
 {
@@ -14,23 +15,20 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        // Password dari ADMIN_PASSWORD. Jika kosong, dibuat acak dan ditampilkan sekali di terminal.
+        $password = config('nursery.admin_password') ?: Str::password(16, symbols: false);
+
         $admin = User::firstOrCreate(
-            ['email' => 'admin@nursery.com'],
+            ['email' => config('nursery.admin_email')],
             [
                 'name' => 'Admin Nursery',
-                'password' => Hash::make('admin123'),
+                'password' => Hash::make($password),
             ]
         );
 
-        $defaultSchedules = [];
-        for ($i = 0; $i < 5; $i++) {
-            $defaultSchedules[] = [
-                'schedules' => [
-                    ['active' => false, 'hour' => 7, 'minute' => 0, 'duration' => 10],
-                    ['active' => false, 'hour' => 12, 'minute' => 0, 'duration' => 10],
-                    ['active' => false, 'hour' => 17, 'minute' => 0, 'duration' => 10],
-                ]
-            ];
+        if ($admin->wasRecentlyCreated && !config('nursery.admin_password')) {
+            $this->command?->warn("Akun admin dibuat: {$admin->email} / {$password}");
+            $this->command?->warn('Simpan password ini. Ganti kapan saja dengan: php artisan nursery:user ' . $admin->email);
         }
 
         DeviceControl::firstOrCreate(
@@ -39,7 +37,7 @@ class DatabaseSeeder extends Seeder
                 'system_mode' => 0, // Auto Fuzzy
                 'manual_mode_type' => 0, // Toggle Direct
                 'manual_duration' => 10,
-                'schedules_json' => $defaultSchedules,
+                'schedules_json' => DeviceControl::defaultSchedules(),
                 'updated_by_user_id' => $admin->id,
             ]
         );

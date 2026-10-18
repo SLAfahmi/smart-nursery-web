@@ -11,17 +11,16 @@ class ZoneLog extends Model
         'sensor_log_id',
         'zone_id',
         'soil_moisture',
-        'zone_mode',
-        'duration',
         'relay_status',
+        'state',
+        'fuzzy_duration',
     ];
 
     protected $casts = [
         'zone_id' => 'integer',
-        'soil_moisture' => 'integer',
-        'zone_mode' => 'integer',
-        'duration' => 'integer',
+        'soil_moisture' => 'float',
         'relay_status' => 'boolean',
+        'fuzzy_duration' => 'float',
     ];
 
     public function sensorLog(): BelongsTo

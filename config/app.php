@@ -65,7 +65,8 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    // Firmware mengirim recorded_at dalam waktu lokal WIB (tanpa offset)
+    'timezone' => 'Asia/Jakarta',
 
     /*
     |--------------------------------------------------------------------------

@@ -55,9 +55,11 @@
                 </button>
             </form>
 
-            <div class="auth-footer">
-                Belum punya akun? <a href="{{ route('register') }}" class="auth-link">Daftar Akun Baru</a>
-            </div>
+            @if (config('nursery.allow_registration'))
+                <div class="auth-footer">
+                    Belum punya akun? <a href="{{ route('register') }}" class="auth-link">Daftar Akun Baru</a>
+                </div>
+            @endif
         </div>
     </div>
 </body>
