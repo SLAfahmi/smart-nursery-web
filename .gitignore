@@ -15,6 +15,9 @@
 .env.backup
 .env.production
 .env.local
+.env.example    
+
+*.md
 
 database/*.sqlite
 database/*.sqlite-journal
