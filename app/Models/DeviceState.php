@@ -16,12 +16,15 @@ class DeviceState extends Model
     protected $fillable = [
         'device_key',
         'reported_version',
+        'firmware_version',
+        'ota_status',
         'last_seen_at',
         'state',
     ];
 
     protected $casts = [
         'reported_version' => 'integer',
+        'ota_status' => 'array',
         'last_seen_at' => 'datetime',
         'state' => 'array',
     ];

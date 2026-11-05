@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\TelemetryController;
+use App\Http\Controllers\FirmwareController;
 use App\Http\Middleware\VerifyDeviceToken;
 use Illuminate\Support\Facades\Route;
 
@@ -15,4 +16,6 @@ Route::prefix('v1')->middleware(['throttle:60,1', VerifyDeviceToken::class])->gr
     Route::post('/telemetry', [TelemetryController::class, 'store']);
     Route::post('/telemetry/sync-batch', [TelemetryController::class, 'syncBatch']);
     Route::get('/device-command', [TelemetryController::class, 'getCommand']);
+    // OTA: path ini dikirim ke alat lewat key "ota" di balasan telemetry
+    Route::get('/firmware/{release}/download', [FirmwareController::class, 'download']);
 });

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ActivityLog;
 use App\Models\DeviceControl;
 use App\Models\DeviceState;
+use App\Models\FirmwareRelease;
 use App\Models\SensorLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -54,6 +55,18 @@ class DashboardController extends Controller
                     ? null
                     : $deviceState->reported_version === $deviceControl->command_version,
                 'clock' => $deviceState?->clockStatus(),
+            ],
+            // Kartu "Update Firmware (OTA)" di tab Config
+            'firmware' => [
+                // null = firmware alat belum mendukung OTA (belum melaporkan versi)
+                'device_version' => $deviceState?->firmware_version,
+                'ota' => $deviceState?->ota_status,
+                'release' => ($release = FirmwareRelease::active()) ? [
+                    'id' => $release->id,
+                    'version' => $release->version,
+                    'size' => $release->size,
+                    'uploaded_at' => $release->created_at->format('d/m/Y H:i'),
+                ] : null,
             ],
             'latest_sensor' => $latest
                 ? array_merge($latest, ['recorded_at' => Carbon::parse($latest['recorded_at'])->format('d/m H:i:s')])

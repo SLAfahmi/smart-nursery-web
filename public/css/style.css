@@ -1771,6 +1771,11 @@ body.has-bottom-nav {
     color: #c0392b;
 }
 
+/* Kartu Update Firmware (OTA): pesan error dari alat bisa panjang */
+.fw-status .status-chip {
+    white-space: normal;
+}
+
 /* Toast: di atas bottom nav pada ponsel, pojok bawah pada desktop */
 .toast {
     position: fixed;

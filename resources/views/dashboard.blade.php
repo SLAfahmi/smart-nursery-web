@@ -262,7 +262,7 @@
 <!-- ===== TAB PANEL: CONFIG ===== -->
 <div class="tab-panel" id="tab-config">
 
-    {{-- Isi & urutan mengikuti tab Config dashboard lokal firmware (data/www/index.html) --}}
+    {{-- Isi & urutan mengikuti tab Config dashboard lokal firmware (web/index.html) --}}
     @php
         // Label durasi seperti formatDuration() di firmware app.js
         $durationLabel = fn (int $s) => $s >= 3600
@@ -416,6 +416,48 @@
     </div>
     </div><!-- /config-grid -->
 
+    <div class="section-label">Firmware</div>
+
+    <!-- Update Firmware (OTA): alat mengambil rilis aktif lewat balasan telemetry, dipasang saat semua relay mati -->
+    <div class="config-item" style="margin-bottom:2rem;">
+        <div class="config-item-header">
+            <div class="config-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+            </div>
+            <div>
+                <div class="form-label" style="margin-bottom:0;">Update Firmware (OTA)</div>
+                <div class="form-hint" style="margin:0;">Alat mengunduh rilis aktif saat online, lalu memasangnya ketika semua relay mati</div>
+            </div>
+        </div>
+        <div class="rtc-status fw-status">
+            <div>Versi di alat: <strong id="fw-device">--</strong></div>
+            <div>Rilis aktif: <strong id="fw-release">--</strong></div>
+            <div>Status: <span class="status-chip" id="fw-chip">--</span></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label" for="fw-version">Versi</label>
+                <input type="text" id="fw-version" class="form-input" placeholder="1.0.2" maxlength="32">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="fw-file">File firmware (.bin)</label>
+                <input type="file" id="fw-file" class="form-input" accept=".bin">
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="fw-notes">Catatan (opsional)</label>
+            <input type="text" id="fw-notes" class="form-input" maxlength="500" placeholder="Perubahan di versi ini">
+        </div>
+        <div class="form-hint" style="margin:0;">Versi harus sama persis dengan <strong>FIRMWARE_VERSION</strong> di include/config.h firmware.</div>
+        <div class="form-row">
+            <button class="btn btn-primary" style="flex:1;" onclick="uploadFirmware(this)">Rilis</button>
+            <button class="btn btn-danger" style="flex:1; display:none;" id="fw-cancel" onclick="cancelFirmware(this)">Batalkan</button>
+        </div>
+    </div>
+
 </div><!-- /tab-panel config -->
 
 @endsection
@@ -445,7 +487,8 @@
 
     async function api(url, options = {}) {
         const headers = { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken };
-        if (options.body) headers['Content-Type'] = 'application/json';
+        // FormData (upload file): browser sendiri yang mengisi Content-Type multipart beserta boundary
+        if (options.body && !(options.body instanceof FormData)) headers['Content-Type'] = 'application/json';
         const res = await fetch(url, { ...options, headers });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || data.status === 'error') throw new Error(data.message || ('HTTP ' + res.status));
@@ -845,6 +888,7 @@
             renderSensorAlert(sensor);
             renderDeviceStatus(data.device);
             renderClock(data.device.clock);
+            renderFirmware(data.firmware);
 
             updateAuditNotice(control.updated_by, control.updated_at_exact);
             renderModeDetail(control);
@@ -913,6 +957,67 @@
             chip.innerText = 'Selisih ' + formatDuration(Math.abs(clock.drift_seconds)) + (clock.drift_seconds > 0 ? ' lebih cepat' : ' lebih lambat');
             chip.className = 'status-chip bad';
         }
+    }
+
+    // Kartu OTA: versi di alat vs rilis aktif, status dari laporan "ota" alat (lihat firmware src/ota.cpp)
+    let firmwareReleaseId = null;
+    function firmwareChip(fw) {
+        const release = fw.release;
+        const ota = fw.ota || {};
+        if (!release) return ['Tidak ada rilis', ''];
+        if (fw.device_version === release.version) return ['Terpasang', 'ok'];
+        if (ota.target === release.version) {
+            if (ota.state === 'deferred') return ['Menunggu relay mati', ''];
+            if (ota.state === 'ready') return ['Menunggu restart', ''];
+            if (ota.state === 'failed') return ['Gagal: ' + (ota.error || 'tidak diketahui') + ' (dicoba lagi)', 'bad'];
+            if (ota.state === 'rejected') return ['Ditolak alat / rollback', 'bad'];
+        }
+        if (!fw.device_version) return ['Firmware alat belum mendukung OTA (upload USB sekali)', ''];
+        return ['Menunggu alat mengambil', ''];
+    }
+
+    function renderFirmware(fw) {
+        const release = fw.release;
+        firmwareReleaseId = release ? release.id : null;
+        document.getElementById('fw-device').innerText = fw.device_version || '--';
+        document.getElementById('fw-release').innerText = release
+            ? `${release.version} (${(release.size / 1048576).toFixed(2)} MB, ${release.uploaded_at})`
+            : 'Tidak ada';
+        document.getElementById('fw-cancel').style.display = release ? '' : 'none';
+
+        const [text, cls] = firmwareChip(fw);
+        const chip = document.getElementById('fw-chip');
+        chip.innerText = text;
+        chip.className = 'status-chip' + (cls ? ' ' + cls : '');
+    }
+
+    function uploadFirmware(button) {
+        const version = document.getElementById('fw-version').value.trim();
+        const file = document.getElementById('fw-file').files[0];
+        if (!version || !file) { toast('Isi versi dan pilih file .bin terlebih dahulu.', 'error'); return; }
+        if (!confirm(`Rilis firmware ${version}? Alat akan memasangnya saat online dan semua relay mati.`)) return;
+
+        const form = new FormData();
+        form.append('version', version);
+        form.append('firmware', file);
+        form.append('notes', document.getElementById('fw-notes').value.trim());
+
+        return withBusy(button, async () => {
+            const data = await api("{{ route('firmware.upload') }}", { method: 'POST', body: form });
+            toast(data.message);
+            ['fw-version', 'fw-file', 'fw-notes'].forEach(id => { document.getElementById(id).value = ''; });
+            fetchStatus();
+        });
+    }
+
+    function cancelFirmware(button) {
+        if (!firmwareReleaseId) return;
+        if (!confirm('Batalkan rilis firmware ini? Alat yang sudah menunggu restart tetap pindah ke versi tersebut.')) return;
+        return withBusy(button, async () => {
+            const data = await api("{{ route('firmware.cancel', ['release' => '__ID__']) }}".replace('__ID__', firmwareReleaseId), { method: 'POST' });
+            toast(data.message);
+            fetchStatus();
+        });
     }
 
     function saveSysConfig(button) {

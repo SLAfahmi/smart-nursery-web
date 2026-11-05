@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\FirmwareController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -33,4 +34,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/sys-config', [DashboardController::class, 'saveSysConfig'])->name('dashboard.sys-config');
     Route::get('/api/export-csv', [DashboardController::class, 'exportCsv'])->name('dashboard.export-csv');
     Route::post('/api/reset-log', [DashboardController::class, 'resetLog'])->name('dashboard.reset-log');
+
+    // Update firmware OTA (kartu di tab Config)
+    Route::post('/api/firmware', [FirmwareController::class, 'upload'])->name('firmware.upload');
+    Route::post('/api/firmware/{release}/cancel', [FirmwareController::class, 'cancel'])->name('firmware.cancel');
 });

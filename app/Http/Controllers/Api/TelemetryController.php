@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\DeviceControl;
 use App\Models\DeviceState;
+use App\Models\FirmwareRelease;
 use App\Models\SensorLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,18 +29,19 @@ class TelemetryController extends Controller
     {
         $validated = $request->validate($this->telemetryRules());
         $deviceState = $this->deviceState($request);
+        $firmware = $this->firmwareState($request);
 
         $snapshot = DeviceState::snapshotFromTelemetry($validated);
 
         try {
-            [$sensorLog, $command] = DB::transaction(function () use ($validated, $deviceState, $snapshot) {
+            [$sensorLog, $command] = DB::transaction(function () use ($validated, $deviceState, $firmware, $snapshot) {
                 $previous = DeviceState::where('device_key', self::DEVICE_KEY)->first()?->state;
 
                 $sensorLog = $this->shouldStoreHistory($previous, $snapshot)
                     ? $this->saveTelemetry($validated, false)
                     : null;
 
-                return [$sensorLog, $this->syncDevice($validated, $deviceState, $snapshot)];
+                return [$sensorLog, $this->syncDevice($validated, $deviceState, $firmware, $snapshot)];
             });
         } catch (\Throwable $e) {
             Log::error('Telemetry save error: ' . $e->getMessage());
@@ -55,6 +57,8 @@ class TelemetryController extends Controller
             'message' => 'Telemetry saved successfully',
             'sensor_log_id' => $sensorLog?->id,
             'device_command' => $command,
+            // Terpisah dari device_command: device_command tidak null membuat alat kirim telemetry konfirmasi cepat
+            'ota' => $this->otaOffer($firmware),
         ], 201);
     }
 
@@ -197,6 +201,51 @@ class TelemetryController extends Controller
     }
 
     /**
+     * Versi firmware & status OTA yang dilaporkan alat (hanya di telemetry live).
+     * Validator terpisah dari deviceState(): field ota yang salah tidak boleh ikut membuang sinkronisasi config.
+     */
+    private function firmwareState(Request $request): array
+    {
+        $validator = Validator::make($request->only(['firmware_version', 'ota']), [
+            'firmware_version' => 'nullable|string|max:32',
+            'ota' => 'nullable|array',
+            'ota.target' => 'nullable|string|max:32',
+            'ota.state' => 'nullable|string|in:deferred,ready,failed,rejected',
+            'ota.error' => 'nullable|string|max:120',
+        ]);
+
+        if ($validator->fails()) {
+            Log::warning('Status firmware dari alat diabaikan', $validator->errors()->toArray());
+
+            return [];
+        }
+
+        return $validator->validated();
+    }
+
+    /**
+     * Tawaran update untuk key "ota" di balasan telemetry; null jika alat tidak perlu update.
+     */
+    private function otaOffer(array $firmware): ?array
+    {
+        $release = FirmwareRelease::active();
+        $current = $firmware['firmware_version'] ?? null;
+
+        // Tanpa versi = firmware lama yang belum mendukung OTA
+        if (!$release || $current === null || $current === $release->version) {
+            return null;
+        }
+
+        // Alat sudah menolak versi ini (rollback / versi di file tidak cocok)
+        $ota = $firmware['ota'] ?? [];
+        if (($ota['target'] ?? null) === $release->version && ($ota['state'] ?? null) === 'rejected') {
+            return null;
+        }
+
+        return $release->toOtaOffer();
+    }
+
+    /**
      * Catat kondisi alat dan tentukan isi device_command.
      *
      * - Versi alat ≠ versi web (atau firmware lama tanpa versi): kirim konfigurasi penuh.
@@ -204,7 +253,7 @@ class TelemetryController extends Controller
      *   saja diubah lewat dashboard lokal (WiFi AP).
      * - Perintah relay dikirim sekali, terpisah dari versi.
      */
-    private function syncDevice(array $telemetry, array $deviceState, array $snapshot): ?array
+    private function syncDevice(array $telemetry, array $deviceState, array $firmware, array $snapshot): ?array
     {
         $control = DeviceControl::where('device_key', self::DEVICE_KEY)->lockForUpdate()->first()
             ?? DeviceControl::current();
@@ -227,6 +276,8 @@ class TelemetryController extends Controller
 
         DeviceState::updateOrCreate(['device_key' => self::DEVICE_KEY], [
             'reported_version' => $reportedVersion,
+            'firmware_version' => $firmware['firmware_version'] ?? null,
+            'ota_status' => $firmware['ota'] ?? null,
             'last_seen_at' => now(),
             'state' => $snapshot,
         ]);
