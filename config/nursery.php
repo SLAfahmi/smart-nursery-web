@@ -37,8 +37,12 @@ return [
     // Akun baru dibuat admin lewat `php artisan nursery:user`.
     'allow_registration' => (bool) env('ALLOW_REGISTRATION', false),
 
-    // Akun admin pertama yang dibuat seeder. Jika ADMIN_PASSWORD kosong, seeder membuat password acak.
-    'admin_email' => env('ADMIN_EMAIL', 'admin@nursery.com'),
+    // Hanya email dengan domain ini yang boleh login / dibuat (login, register, `nursery:user`, seeder).
+    'email_domain' => env('ALLOWED_EMAIL_DOMAIN', 'gmail.com'),
+
+    // Akun admin pertama yang dibuat seeder, wajib alamat @email_domain.
+    // Jika ADMIN_PASSWORD kosong, seeder membuat password acak.
+    'admin_email' => env('ADMIN_EMAIL'),
     'admin_password' => env('ADMIN_PASSWORD'),
 
 ];

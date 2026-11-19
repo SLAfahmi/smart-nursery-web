@@ -209,12 +209,75 @@ class FirmwareOtaTest extends TestCase
 
     public function test_upload_rejects_bad_or_duplicate_version(): void
     {
-        $this->upload('v1.0')->assertStatus(422)->assertJsonValidationErrors('version');
+        // Hanya angka 0-9 bertitik X.Y.Z (versi juga dipakai sebagai nama file)
+        foreach (['v1.0', '1.a.2', '1.0', '1.0.2.3', '1000.0.0', '1.0.2-beta', '١.٠.٢', '../1.0.2', '1.0.2/x'] as $bad) {
+            $this->upload($bad)->assertStatus(422)->assertJsonValidationErrors('version');
+        }
+        $this->assertDatabaseCount('firmware_releases', 0);
 
         $this->release('1.0.2');
         $this->upload('1.0.2')->assertStatus(422)->assertJsonValidationErrors('version');
 
         $this->assertDatabaseCount('firmware_releases', 1);
+    }
+
+    public function test_upload_rejects_non_bin_file_and_long_notes(): void
+    {
+        $user = User::factory()->create();
+
+        // Isi berawalan 0xE9 tetapi ekstensi bukan .bin
+        $this->actingAs($user)->postJson('/api/firmware', [
+            'version' => '1.0.2',
+            'firmware' => UploadedFile::fake()->createWithContent('fw.txt', $this->binary()),
+        ])->assertStatus(422)->assertJsonValidationErrors(['firmware' => 'File firmware harus berformat .bin.']);
+
+        foreach (['fw.bin.exe', 'fw.hex', 'fw', 'fw.bin.'] as $name) {
+            $this->actingAs($user)->postJson('/api/firmware', [
+                'version' => '1.0.2',
+                'firmware' => UploadedFile::fake()->createWithContent($name, $this->binary()),
+            ])->assertStatus(422)->assertJsonValidationErrors('firmware');
+        }
+
+        $this->actingAs($user)->postJson('/api/firmware', [
+            'version' => '1.0.2',
+            'firmware' => UploadedFile::fake()->create('fw.bin', 6401),
+        ])->assertStatus(422)->assertJsonValidationErrors('firmware');
+
+        $this->actingAs($user)->postJson('/api/firmware', [
+            'version' => '1.0.2',
+            'firmware' => UploadedFile::fake()->createWithContent('fw.bin', $this->binary()),
+            'notes' => str_repeat('n', 501),
+        ])->assertStatus(422)->assertJsonValidationErrors('notes');
+
+        $this->assertDatabaseCount('firmware_releases', 0);
+    }
+
+    public function test_version_whitespace_is_trimmed_before_validation(): void
+    {
+        // Middleware TrimStrings membuang spasi/newline, jadi nama file tetap bersih
+        $this->upload(" 1.0.3\n")->assertOk();
+
+        $release = FirmwareRelease::sole();
+        $this->assertSame('1.0.3', $release->version);
+        $this->assertSame('firmware/1.0.3.bin', $release->path);
+    }
+
+    public function test_upload_accepts_uppercase_bin_extension(): void
+    {
+        $this->actingAs(User::factory()->create())->postJson('/api/firmware', [
+            'version' => '1.0.4',
+            'firmware' => UploadedFile::fake()->createWithContent('FIRMWARE.BIN', $this->binary()),
+        ])->assertOk();
+
+        $this->assertSame('firmware/1.0.4.bin', FirmwareRelease::sole()->path);
+    }
+
+    public function test_config_tab_restricts_firmware_inputs(): void
+    {
+        $this->actingAs(User::factory()->create())->get('/dashboard')
+            ->assertSee('pattern="\d{1,3}\.\d{1,3}\.\d{1,3}"', false)
+            ->assertSee('accept=".bin"', false)
+            ->assertDontSee('application/octet-stream', false);
     }
 
     public function test_upload_requires_login(): void

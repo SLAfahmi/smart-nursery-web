@@ -4,10 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\ActivityLog;
 use App\Models\User;
+use App\Rules\AllowedEmailDomain;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rules\Password;
 
 class AuthController extends Controller
 {
@@ -21,9 +21,11 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
+        $request->merge(['email' => AllowedEmailDomain::normalize($request->input('email'))]);
+
         $credentials = $request->validate([
-            'email' => ['required', 'email'],
-            'password' => ['required'],
+            'email' => AllowedEmailDomain::rules(),
+            'password' => ['required', 'string', 'max:255'],
         ]);
 
         if (Auth::attempt($credentials, $request->boolean('remember'))) {
@@ -57,10 +59,13 @@ class AuthController extends Controller
     {
         abort_unless(config('nursery.allow_registration'), 404);
 
+        $request->merge(['email' => AllowedEmailDomain::normalize($request->input('email'))]);
+
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
-            'password' => ['required', 'string', 'min:6', 'confirmed'],
+            'name' => ['required', 'string', 'max:100'],
+            'email' => [...AllowedEmailDomain::rules(), 'unique:users'],
+            // Minimal sama dengan `nursery:user`; bcrypt hanya memakai 72 byte pertama
+            'password' => ['required', 'string', 'min:8', 'max:72', 'confirmed'],
         ]);
 
         $user = User::create([

@@ -33,6 +33,7 @@ Route::middleware('auth')->group(function () {
     // Config routes (tab Config, mengikuti halaman Config dashboard lokal firmware)
     Route::post('/api/sys-config', [DashboardController::class, 'saveSysConfig'])->name('dashboard.sys-config');
     Route::get('/api/export-csv', [DashboardController::class, 'exportCsv'])->name('dashboard.export-csv');
+    Route::get('/api/export-xlsx', [DashboardController::class, 'exportXlsx'])->name('dashboard.export-xlsx');
     Route::post('/api/reset-log', [DashboardController::class, 'resetLog'])->name('dashboard.reset-log');
 
     // Update firmware OTA (kartu di tab Config)

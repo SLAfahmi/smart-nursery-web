@@ -31,12 +31,14 @@
                 @csrf
                 <div>
                     <label for="email" class="form-label">Email Address</label>
-                    <input type="email" id="email" name="email" class="form-input" placeholder="admin@nursery.com" value="{{ old('email') }}" required autofocus>
+                    <input type="email" id="email" name="email" class="form-input" placeholder="{{ 'nama@' . \App\Rules\AllowedEmailDomain::domain() }}" value="{{ old('email') }}"
+                        maxlength="255" pattern="{{ \App\Rules\AllowedEmailDomain::htmlPattern() }}" title="{{ 'Gunakan alamat @' . \App\Rules\AllowedEmailDomain::domain() }}"
+                        autocomplete="email" autocapitalize="none" spellcheck="false" required autofocus>
                 </div>
 
                 <div>
                     <label for="password" class="form-label">Password</label>
-                    <input type="password" id="password" name="password" class="form-input" placeholder="••••••••" required>
+                    <input type="password" id="password" name="password" class="form-input" placeholder="••••••••" maxlength="255" autocomplete="current-password" required>
                 </div>
 
                 <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem;">

@@ -178,6 +178,92 @@ class HistoryAndExportTest extends TestCase
         $this->assertCount(3, array_filter(explode("\n", trim($response->streamedContent()))));
     }
 
+    /** @return array<string, \SimpleXMLElement> isi .xlsx (semua bagian XML harus valid) */
+    private function readXlsx($response): array
+    {
+        $path = $response->baseResponse->getFile()->getPathname();
+        $zip = new \ZipArchive();
+        $this->assertTrue($zip->open($path) === true, 'File .xlsx harus berupa ZIP yang valid');
+
+        $parts = [];
+        foreach (['[Content_Types].xml', '_rels/.rels', 'xl/workbook.xml', 'xl/_rels/workbook.xml.rels', 'xl/styles.xml', 'xl/worksheets/sheet1.xml'] as $name) {
+            $xml = $zip->getFromName($name);
+            $this->assertNotFalse($xml, "Bagian {$name} wajib ada");
+            $parts[$name] = simplexml_load_string($xml);
+            $this->assertNotFalse($parts[$name], "Bagian {$name} harus XML yang valid");
+        }
+        $zip->close();
+        @unlink($path);
+
+        return $parts;
+    }
+
+    public function test_xlsx_export_for_one_day(): void
+    {
+        $user = User::factory()->create();
+        $this->storeLog('2026-10-10 23:59:00');
+        $this->storeLog('2026-10-11 08:00:00', true);
+        $this->storeLog('2026-10-11 09:30:00', false, 28.4);
+        $this->storeLog('2026-10-12 00:00:01');
+
+        $response = $this->actingAs($user)->get('/api/export-xlsx?date=2026-10-11');
+        $response->assertOk()->assertDownload('smart_nursery_log_2026-10-11.xlsx');
+        $this->assertSame('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $response->headers->get('Content-Type'));
+
+        $parts = $this->readXlsx($response);
+        $this->assertSame('Log Sensor', (string) $parts['xl/workbook.xml']->sheets->sheet['name']);
+
+        $rows = $parts['xl/worksheets/sheet1.xml']->sheetData->row;
+        $this->assertCount(3, $rows, 'Header + 2 baris pada tanggal 11');
+
+        // Header tebal: teks, gaya 1
+        $this->assertSame('Waktu', (string) $rows[0]->c[0]->is->t);
+        $this->assertSame('1', (string) $rows[0]->c[0]['s']);
+        $this->assertStringContainsString('Zona 3 Tanah (%)', $rows[0]->asXML());
+
+        // Waktu = tanggal Excel asli (gaya 2), 2026-10-11 08:00:00 -> 46306.3333...
+        $this->assertSame('2', (string) $rows[1]->c[0]['s']);
+        $this->assertEqualsWithDelta(46306 + 8 / 24, (float) $rows[1]->c[0]->v, 1e-6);
+        $this->assertStringContainsString('Offline', $rows[1]->asXML());
+
+        // Angka tetap angka (bukan teks), teks ON/watering tetap teks
+        $cells = [];
+        foreach ($rows[2]->c as $c) {
+            $cells[(string) $c['r']] = isset($c['t']) ? (string) $c->is->t : (float) $c->v;
+        }
+        $this->assertSame(28.4, $cells['B3']);
+        $this->assertSame(40.5, $cells['E3']);
+        $this->assertSame('ON', $cells['F3']);
+        $this->assertSame('watering', $cells['G3']);
+        $this->assertArrayNotHasKey('H3', $cells, 'Zona 2 tanpa data = sel kosong');
+    }
+
+    public function test_xlsx_export_for_date_range_and_empty_day(): void
+    {
+        $user = User::factory()->create();
+        $this->storeLog('2026-09-01 10:00:00');
+        $this->storeLog('2026-10-11 10:00:00');
+
+        $response = $this->actingAs($user)->get('/api/export-xlsx?from=2026-09-01&to=2026-10-11');
+        $response->assertOk()->assertDownload('smart_nursery_log_2026-09-01_sd_2026-10-11.xlsx');
+        $this->assertCount(3, $this->readXlsx($response)['xl/worksheets/sheet1.xml']->sheetData->row);
+
+        // Hari tanpa data tetap menghasilkan file berisi header saja
+        $response = $this->actingAs($user)->get('/api/export-xlsx?date=2026-08-01');
+        $response->assertOk();
+        $this->assertCount(1, $this->readXlsx($response)['xl/worksheets/sheet1.xml']->sheetData->row);
+    }
+
+    public function test_xlsx_export_rejects_invalid_range_and_requires_login(): void
+    {
+        // Path api/* selalu dijawab JSON (bootstrap/app.php), jadi tamu dapat 401, bukan redirect
+        $this->get('/api/export-xlsx?date=2026-10-11')->assertUnauthorized();
+
+        $this->actingAs(User::factory()->create())->getJson('/api/export-xlsx?from=2026-10-11&to=2026-10-01')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('to');
+    }
+
     public function test_csv_export_rejects_invalid_range(): void
     {
         $user = User::factory()->create();

@@ -31,22 +31,24 @@
                 @csrf
                 <div>
                     <label for="name" class="form-label">Nama Lengkap</label>
-                    <input type="text" id="name" name="name" class="form-input" placeholder="Budi Santoso" value="{{ old('name') }}" required autofocus>
+                    <input type="text" id="name" name="name" class="form-input" placeholder="Budi Santoso" value="{{ old('name') }}" maxlength="100" autocomplete="name" required autofocus>
                 </div>
 
                 <div>
                     <label for="email" class="form-label">Email Address</label>
-                    <input type="email" id="email" name="email" class="form-input" placeholder="budi@nursery.com" value="{{ old('email') }}" required>
+                    <input type="email" id="email" name="email" class="form-input" placeholder="{{ 'budi@' . \App\Rules\AllowedEmailDomain::domain() }}" value="{{ old('email') }}"
+                        maxlength="255" pattern="{{ \App\Rules\AllowedEmailDomain::htmlPattern() }}" title="{{ 'Gunakan alamat @' . \App\Rules\AllowedEmailDomain::domain() }}"
+                        autocomplete="email" autocapitalize="none" spellcheck="false" required>
                 </div>
 
                 <div>
                     <label for="password" class="form-label">Password</label>
-                    <input type="password" id="password" name="password" class="form-input" placeholder="••••••••" required>
+                    <input type="password" id="password" name="password" class="form-input" placeholder="Minimal 8 karakter" minlength="8" maxlength="72" autocomplete="new-password" required>
                 </div>
 
                 <div>
                     <label for="password_confirmation" class="form-label">Konfirmasi Password</label>
-                    <input type="password" id="password_confirmation" name="password_confirmation" class="form-input" placeholder="••••••••" required>
+                    <input type="password" id="password_confirmation" name="password_confirmation" class="form-input" placeholder="••••••••" minlength="8" maxlength="72" autocomplete="new-password" required>
                 </div>
 
                 <button type="submit" class="btn-cta">

@@ -7,6 +7,7 @@ use App\Models\DeviceControl;
 use App\Models\DeviceState;
 use App\Models\FirmwareRelease;
 use App\Models\SensorLog;
+use App\Support\XlsxWriter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -240,13 +241,57 @@ class DashboardController extends Controller
         return response()->json(['status' => 'success']);
     }
 
-    // ── Export CSV ────────────────────────────────────────────
+    // ── Export CSV / XLSX ─────────────────────────────────────
     /**
      * Per hari: ?date=2026-10-11 (default hari ini).
      * Rentang:  ?from=2026-10-01&to=2026-10-11
      * Diurutkan berdasarkan waktu rekam alat (recorded_at), termasuk data dari buffer offline.
      */
     public function exportCsv(Request $request)
+    {
+        [$from, $to, $basename] = $this->exportRange($request);
+
+        $callback = function () use ($from, $to) {
+            $handle = fopen('php://output', 'w');
+            fwrite($handle, "\xEF\xBB\xBF");   // BOM agar Excel membaca UTF-8 (simbol °)
+
+            fputcsv($handle, $this->exportHeader());
+            foreach ($this->exportRows($from, $to) as $row) {
+                $row[0] = $row[0]?->format('Y-m-d H:i:s');
+                fputcsv($handle, array_map(fn ($value) => $value ?? '', $row));
+            }
+
+            fclose($handle);
+        };
+
+        return response()->stream($callback, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$basename}.csv\"",
+        ]);
+    }
+
+    /** Sama dengan CSV, tetapi angka tetap angka dan Waktu berupa tanggal Excel (bisa diurutkan / difilter) */
+    public function exportXlsx(Request $request)
+    {
+        [$from, $to, $basename] = $this->exportRange($request);
+
+        $header = $this->exportHeader();
+        $widths = array_map(fn ($title) => max(10, mb_strlen($title) + 2), $header);
+        $widths[0] = 20;
+
+        $xlsx = new XlsxWriter('Log Sensor', $widths);
+        $xlsx->addRow($header, XlsxWriter::STYLE_HEADER);
+        foreach ($this->exportRows($from, $to) as $row) {
+            $xlsx->addRow($row);
+        }
+
+        return response()->download($xlsx->finish(), "{$basename}.xlsx", [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend();
+    }
+
+    /** @return array{0: Carbon, 1: Carbon, 2: string} awal, akhir, nama file tanpa ekstensi */
+    private function exportRange(Request $request): array
     {
         $validated = $request->validate([
             'date' => 'nullable|date_format:Y-m-d',
@@ -262,52 +307,51 @@ class DashboardController extends Controller
             $to = $from->copy()->endOfDay();
         }
 
-        $filename = $from->isSameDay($to)
-            ? "smart_nursery_log_{$from->toDateString()}.csv"
-            : "smart_nursery_log_{$from->toDateString()}_sd_{$to->toDateString()}.csv";
+        $basename = $from->isSameDay($to)
+            ? "smart_nursery_log_{$from->toDateString()}"
+            : "smart_nursery_log_{$from->toDateString()}_sd_{$to->toDateString()}";
+
+        return [$from, $to, $basename];
+    }
+
+    private function exportHeader(): array
+    {
+        $header = ['Waktu', 'Suhu (°C)', 'Kelembaban Udara (%)', 'Cahaya (lx)'];
+        foreach (range(1, config('nursery.zones')) as $zone) {
+            array_push($header, "Zona {$zone} Tanah (%)", "Zona {$zone} Valve", "Zona {$zone} Status");
+        }
+
+        return array_merge($header, ['Pompa', 'Mode', 'Sumber']);
+    }
+
+    /**
+     * Satu baris per log, kolom sesuai exportHeader(). Kolom pertama Carbon (atau null), nilai kosong null.
+     * Diambil per 500 baris agar memori tetap kecil walau rentangnya panjang.
+     */
+    private function exportRows(Carbon $from, Carbon $to): \Generator
+    {
         $zoneCount = config('nursery.zones');
 
-        $callback = function () use ($from, $to, $zoneCount) {
-            $handle = fopen('php://output', 'w');
-            fwrite($handle, "\xEF\xBB\xBF");   // BOM agar Excel membaca UTF-8 (simbol °)
+        $logs = SensorLog::with('zoneLogs')
+            ->whereBetween('recorded_at', [$from, $to])
+            ->orderBy('recorded_at')->orderBy('id')
+            ->lazy(500);
 
-            $header = ['Waktu', 'Suhu (°C)', 'Kelembaban Udara (%)', 'Cahaya (lx)'];
+        foreach ($logs as $log) {
+            $row = [$log->recorded_at, $log->temperature, $log->humidity, $log->light_level];
+            $zones = $log->zoneLogs->keyBy('zone_id');
             foreach (range(1, $zoneCount) as $zone) {
-                array_push($header, "Zona {$zone} Tanah (%)", "Zona {$zone} Valve", "Zona {$zone} Status");
+                $z = $zones->get($zone);
+                array_push($row, $z?->soil_moisture, $z ? ($z->relay_status ? 'ON' : 'OFF') : null, $z?->state);
             }
-            fputcsv($handle, array_merge($header, ['Pompa', 'Mode', 'Sumber']));
+            array_push($row,
+                $log->relay_main ? 'ON' : 'OFF',
+                self::MODE_NAMES[$log->system_mode] ?? $log->system_mode,
+                $log->is_offline_data ? 'Offline' : 'Live',
+            );
 
-            // Ditulis per 500 baris agar memori tetap kecil walau rentangnya panjang
-            SensorLog::with('zoneLogs')
-                ->whereBetween('recorded_at', [$from, $to])
-                ->orderBy('recorded_at')->orderBy('id')
-                ->chunk(500, function ($logs) use ($handle, $zoneCount) {
-                    foreach ($logs as $log) {
-                        $row = [
-                            $log->recorded_at?->format('Y-m-d H:i:s'),
-                            $log->temperature ?? '', $log->humidity ?? '', $log->light_level ?? '',
-                        ];
-                        $zones = $log->zoneLogs->keyBy('zone_id');
-                        foreach (range(1, $zoneCount) as $zone) {
-                            $z = $zones->get($zone);
-                            array_push($row, $z?->soil_moisture ?? '', $z ? ($z->relay_status ? 'ON' : 'OFF') : '', $z?->state ?? '');
-                        }
-                        array_push($row,
-                            $log->relay_main ? 'ON' : 'OFF',
-                            self::MODE_NAMES[$log->system_mode] ?? $log->system_mode,
-                            $log->is_offline_data ? 'Offline' : 'Live',
-                        );
-                        fputcsv($handle, $row);
-                    }
-                });
-
-            fclose($handle);
-        };
-
-        return response()->stream($callback, 200, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
-        ]);
+            yield $row;
+        }
     }
 
     // ── Reset Log ─────────────────────────────────────────────

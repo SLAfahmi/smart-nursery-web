@@ -37,10 +37,18 @@ class FirmwareController extends Controller
     public function upload(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            // Harus sama persis dengan FIRMWARE_VERSION di include/config.h firmware
-            'version' => ['required', 'string', 'max:32', 'regex:/^\d+\.\d+\.\d+$/', 'unique:firmware_releases,version'],
+            // Harus sama persis dengan FIRMWARE_VERSION di include/config.h firmware.
+            // Hanya angka 0-9 bertitik. \z (bukan $) agar "1.0.2\n" tidak lolos, versi dipakai sebagai nama file.
+            'version' => ['required', 'string', 'max:11', 'regex:/^\d{1,3}\.\d{1,3}\.\d{1,3}\z/', 'unique:firmware_releases,version'],
             'firmware' => 'required|file|extensions:bin|max:6400',   // KB, partisi app 6.25 MB
             'notes' => 'nullable|string|max:500',
+        ], [
+            'version.regex' => 'Versi harus angka dengan format X.Y.Z (mis. 1.0.2).',
+            'version.max' => 'Versi harus angka dengan format X.Y.Z (mis. 1.0.2).',
+            'version.unique' => 'Versi ini sudah pernah dirilis.',
+            'firmware.extensions' => 'File firmware harus berformat .bin.',
+            'firmware.max' => 'Ukuran file firmware maksimal 6,25 MB.',
+            'notes.max' => 'Catatan maksimal 500 karakter.',
         ]);
 
         $file = $request->file('firmware');

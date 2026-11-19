@@ -172,7 +172,7 @@
             <div class="zone-panel-head">
                 <div>
                     <div class="mode-settings-title">Status Zona</div>
-                    <div class="form-hint" style="margin:0.15rem 0 0;">Durasi siram dihitung fuzzy dari kelembaban tanah, suhu, dan cahaya. Zona tanpa sensor tanah tidak disiram otomatis.</div>
+                    <div class="form-hint" style="margin:0.15rem 0 0;">Durasi siram dihitung otomatis dari kelembaban tanah, suhu, dan cahaya.</div>
                 </div>
                 <span class="pump-chip" id="auto-pump">Pompa Utama --</span>
             </div>
@@ -205,7 +205,7 @@
         <h3 class="section-title">Kontrol Relay Manual</h3>
         <span class="count-badge">Pompa + {{ config('nursery.zones') }} Zona</span>
     </div>
-    <p class="form-hint" style="margin:0 0 0.75rem;">Perintah dikirim ke alat bersama balasan telemetry berikutnya (±5 detik). Pompa utama menyala otomatis selama ada valve zona yang terbuka.</p>
+    <p class="form-hint" style="margin:0 0 0.75rem;">Perintah sampai ke alat dalam ±5 detik. Pompa utama ikut menyala selama ada valve terbuka.</p>
     <div class="alert-warning" id="relay-hint" style="display:none; margin-bottom:0.75rem;">
         Relay hanya bisa dikontrol pada mode <strong>Manual</strong>. Ubah mode sistem terlebih dahulu.
     </div>
@@ -351,7 +351,7 @@
             </div>
             <div>
                 <div class="form-label" style="margin-bottom:0;">Sinkronisasi Waktu RTC</div>
-                <div class="form-hint" style="margin:0;">Jam alat disinkronkan otomatis dari internet (NTP) saat alat online</div>
+                <div class="form-hint" style="margin:0;">Otomatis dari internet saat alat online</div>
             </div>
         </div>
         <div class="rtc-status">
@@ -359,7 +359,6 @@
             <div>Status jam: <span class="status-chip" id="rtc-chip">--</span></div>
             <div>Diterima server: <strong id="rtc-received">--</strong></div>
         </div>
-        <div class="form-hint" style="margin:0;">Sync manual: sambungkan HP ke WiFi <strong>SmartNursery-TelU</strong>, buka <strong>192.168.4.1</strong> → Config → Sync Waktu Sekarang.</div>
     </div>
 
     <!-- Export CSV -->
@@ -373,7 +372,7 @@
             </div>
             <div>
                 <div class="form-label" style="margin-bottom:0;">Export Log Data</div>
-                <div class="form-hint" style="margin:0;">Unduh riwayat sensor per hari sebagai file .csv</div>
+                <div class="form-hint" style="margin:0;">Unduh riwayat sensor sebagai file Excel (.xlsx) atau .csv</div>
             </div>
         </div>
         <div class="form-row">
@@ -395,7 +394,10 @@
                 <input type="date" id="csv-to" class="form-input" value="{{ now()->toDateString() }}" max="{{ now()->toDateString() }}">
             </div>
         </div>
-        <button class="btn btn-secondary btn-block" onclick="exportLogCSV()">Export CSV</button>
+        <div class="form-row">
+            <button class="btn btn-primary" style="flex:1;" onclick="exportLog('xlsx')">Export Excel</button>
+            <button class="btn btn-secondary" style="flex:1;" onclick="exportLog('csv')">Export CSV</button>
+        </div>
     </div>
 
     <!-- Hapus Log Data -->
@@ -429,7 +431,7 @@
             </div>
             <div>
                 <div class="form-label" style="margin-bottom:0;">Update Firmware (OTA)</div>
-                <div class="form-hint" style="margin:0;">Alat mengunduh rilis aktif saat online, lalu memasangnya ketika semua relay mati</div>
+                <div class="form-hint" style="margin:0;">Alat memasang rilis aktif saat online dan semua relay mati</div>
             </div>
         </div>
         <div class="rtc-status fw-status">
@@ -440,18 +442,25 @@
         <div class="form-row">
             <div class="form-group">
                 <label class="form-label" for="fw-version">Versi</label>
-                <input type="text" id="fw-version" class="form-input" placeholder="1.0.2" maxlength="32">
+                {{-- Hanya angka dan titik (X.Y.Z), sama dengan validasi server di FirmwareController::upload --}}
+                <input type="text" id="fw-version" class="form-input" placeholder="1.0.2" maxlength="11"
+                    inputmode="decimal" pattern="\d{1,3}\.\d{1,3}\.\d{1,3}" autocomplete="off" spellcheck="false"
+                    oninput="this.value = this.value.replace(/[^0-9.]/g, '')">
             </div>
             <div class="form-group">
                 <label class="form-label" for="fw-file">File firmware (.bin)</label>
-                <input type="file" id="fw-file" class="form-input" accept=".bin">
+                <input type="file" id="fw-file" class="form-input" accept=".bin" onchange="checkFirmwareFile(this)">
             </div>
         </div>
         <div class="form-group">
-            <label class="form-label" for="fw-notes">Catatan (opsional)</label>
-            <input type="text" id="fw-notes" class="form-input" maxlength="500" placeholder="Perubahan di versi ini">
+            <label class="form-label" for="fw-notes" style="display:flex; justify-content:space-between;">
+                <span>Catatan (opsional)</span>
+                <span class="form-hint" id="fw-notes-count" style="margin:0; font-weight:400;">0/500</span>
+            </label>
+            <input type="text" id="fw-notes" class="form-input" maxlength="500" placeholder="Perubahan di versi ini"
+                oninput="document.getElementById('fw-notes-count').innerText = this.value.length + '/500'">
         </div>
-        <div class="form-hint" style="margin:0;">Versi harus sama persis dengan <strong>FIRMWARE_VERSION</strong> di include/config.h firmware.</div>
+        <div class="form-hint" style="margin:0;">Versi angka <strong>X.Y.Z</strong> (mis. 1.0.2). File .bin maksimal 6,25 MB.</div>
         <div class="form-row">
             <button class="btn btn-primary" style="flex:1;" onclick="uploadFirmware(this)">Rilis</button>
             <button class="btn btn-danger" style="flex:1; display:none;" id="fw-cancel" onclick="cancelFirmware(this)">Batalkan</button>
@@ -515,7 +524,6 @@
                         <div class="valve-name">Zona ${i}</div>
                         <span class="valve-mode-badge ${on ? 'on' : ''}">${stateLabel}</span>
                     </div>
-                    <div class="valve-desc">Sub-Blok Area Pembibitan ${i}</div>
                     <div class="valve-metrics">
                         <div class="valve-metric">Tanah: <span>${z.soil_moisture === null ? 'sensor --' : fmt(z.soil_moisture) + '%'}</span></div>
                         <div class="valve-metric">Valve: <span>${on ? 'ON' : 'OFF'}</span></div>
@@ -991,10 +999,30 @@
         chip.className = 'status-chip' + (cls ? ' ' + cls : '');
     }
 
+    // Batas sama dengan validasi server (FirmwareController::upload); server tetap memeriksa ulang
+    const FW_VERSION_RE = /^\d{1,3}\.\d{1,3}\.\d{1,3}$/;
+    const FW_MAX_BYTES = 6400 * 1024;
+
+    // Langsung saat file dipilih: selain .bin dikosongkan, jadi tidak bisa ikut dirilis
+    function checkFirmwareFile(input) {
+        const file = input.files[0];
+        if (!file) return;
+        if (!/\.bin$/i.test(file.name)) {
+            input.value = '';
+            toast('File firmware harus berformat .bin.', 'error');
+        } else if (file.size === 0 || file.size > FW_MAX_BYTES) {
+            input.value = '';
+            toast('Ukuran file firmware harus di antara 1 byte dan 6,25 MB.', 'error');
+        }
+    }
+
     function uploadFirmware(button) {
         const version = document.getElementById('fw-version').value.trim();
         const file = document.getElementById('fw-file').files[0];
         if (!version || !file) { toast('Isi versi dan pilih file .bin terlebih dahulu.', 'error'); return; }
+        if (!FW_VERSION_RE.test(version)) { toast('Versi harus angka dengan format X.Y.Z (mis. 1.0.2).', 'error'); return; }
+        if (!/\.bin$/i.test(file.name)) { toast('File firmware harus berformat .bin.', 'error'); return; }
+        if (file.size === 0 || file.size > FW_MAX_BYTES) { toast('Ukuran file firmware harus di antara 1 byte dan 6,25 MB.', 'error'); return; }
         if (!confirm(`Rilis firmware ${version}? Alat akan memasangnya saat online dan semua relay mati.`)) return;
 
         const form = new FormData();
@@ -1006,6 +1034,7 @@
             const data = await api("{{ route('firmware.upload') }}", { method: 'POST', body: form });
             toast(data.message);
             ['fw-version', 'fw-file', 'fw-notes'].forEach(id => { document.getElementById(id).value = ''; });
+            document.getElementById('fw-notes-count').innerText = '0/500';
             fetchStatus();
         });
     }
@@ -1038,7 +1067,9 @@
         document.getElementById('csv-date').closest('.form-row').style.display = useRange ? 'none' : 'flex';
     }
 
-    function exportLogCSV() {
+    const EXPORT_URLS = { csv: "{{ route('dashboard.export-csv') }}", xlsx: "{{ route('dashboard.export-xlsx') }}" };
+
+    function exportLog(format) {
         let params;
         if (document.getElementById('csv-use-range').checked) {
             const from = document.getElementById('csv-from').value;
@@ -1050,7 +1081,7 @@
             if (!date) { toast('Pilih tanggal terlebih dahulu.', 'error'); return; }
             params = new URLSearchParams({ date });
         }
-        window.location.href = "{{ route('dashboard.export-csv') }}?" + params;
+        window.location.href = EXPORT_URLS[format] + '?' + params;
     }
 
     function resetLogData(button) {
