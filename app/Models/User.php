@@ -26,8 +26,15 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'disabled_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /** Akses dicabut admin (`php artisan nursery:user <email> --cabut`). Riwayat aktivitas tetap disimpan. */
+    public function isDisabled(): bool
+    {
+        return $this->disabled_at !== null;
     }
 
     public function activityLogs()

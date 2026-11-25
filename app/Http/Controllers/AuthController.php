@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Middleware\EnsureAccountActive;
 use App\Models\ActivityLog;
 use App\Models\User;
 use App\Rules\AllowedEmailDomain;
@@ -28,7 +29,28 @@ class AuthController extends Controller
             'password' => ['required', 'string', 'max:255'],
         ]);
 
-        if (Auth::attempt($credentials, $request->boolean('remember'))) {
+        // Callback hanya dipanggil Laravel jika password benar, jadi pesan "dinonaktifkan"
+        // tidak membocorkan status akun ke orang yang tidak tahu passwordnya.
+        $disabledUser = null;
+        $loggedIn = Auth::attemptWhen($credentials, function (User $user) use (&$disabledUser) {
+            if ($user->isDisabled()) {
+                $disabledUser = $user;
+                return false;
+            }
+            return true;
+        }, $request->boolean('remember'));
+
+        if ($disabledUser) {
+            ActivityLog::create([
+                'user_id' => $disabledUser->id,
+                'action' => 'Login Ditolak (Akun Nonaktif)',
+                'details_json' => ['ip' => $request->ip(), 'user_agent' => $request->userAgent()],
+            ]);
+
+            return back()->withErrors(['email' => EnsureAccountActive::MESSAGE])->onlyInput('email');
+        }
+
+        if ($loggedIn) {
             $request->session()->regenerate();
 
             ActivityLog::create([
@@ -47,7 +69,7 @@ class AuthController extends Controller
 
     public function showRegisterForm()
     {
-        abort_unless(config('nursery.allow_registration'), 404);
+        abort_unless(self::registrationOpen(), 404);
 
         if (Auth::check()) {
             return redirect()->route('dashboard');
@@ -57,7 +79,19 @@ class AuthController extends Controller
 
     public function register(Request $request)
     {
-        abort_unless(config('nursery.allow_registration'), 404);
+        abort_unless(self::registrationOpen(), 404);
+
+        // Kode dicek lebih dulu dan terpisah: tanpa kode yang benar, orang luar tidak
+        // mendapat info apa pun (mis. apakah sebuah email sudah terdaftar).
+        $request->validate([
+            'registration_code' => ['required', 'string', 'max:255', function (string $attribute, mixed $value, \Closure $fail) {
+                if (!is_string($value) || !hash_equals((string) config('nursery.registration_code'), $value)) {
+                    $fail('Kode pendaftaran salah. Minta kode ke admin nursery.');
+                }
+            }],
+        ], [
+            'registration_code.required' => 'Kode pendaftaran wajib diisi. Minta kode ke admin nursery.',
+        ]);
 
         $request->merge(['email' => AllowedEmailDomain::normalize($request->input('email'))]);
 
@@ -79,10 +113,17 @@ class AuthController extends Controller
         ActivityLog::create([
             'user_id' => $user->id,
             'action' => 'Registrasi Akun Baru',
-            'details_json' => ['email' => $user->email],
+            'details_json' => ['email' => $user->email, 'ip' => $request->ip()],
         ]);
 
         return redirect()->route('dashboard');
+    }
+
+    /** Pendaftaran terbuka hanya jika REGISTRATION_CODE di .env valid (lihat config/nursery.php) */
+    public static function registrationOpen(): bool
+    {
+        $code = config('nursery.registration_code');
+        return is_string($code) && $code !== '';
     }
 
     public function logout(Request $request)

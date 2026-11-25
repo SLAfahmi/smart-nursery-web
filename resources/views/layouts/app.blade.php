@@ -90,17 +90,15 @@
                     <span class="sidebar-label">Kontrol</span>
                 </button>
 
-                <button class="sidebar-item" data-tab="tab-log" onclick="switchTab('tab-log', this)" aria-label="Log" title="Log">
+                <button class="sidebar-item" data-tab="tab-stats" onclick="switchTab('tab-stats', this)" aria-label="Statistik" title="Statistik">
                     <span class="sidebar-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                            <polyline points="14 2 14 8 20 8"/>
-                            <line x1="16" y1="13" x2="8" y2="13"/>
-                            <line x1="16" y1="17" x2="8" y2="17"/>
-                            <polyline points="10 9 9 9 8 9"/>
+                            <line x1="18" y1="20" x2="18" y2="10"/>
+                            <line x1="12" y1="20" x2="12" y2="4"/>
+                            <line x1="6" y1="20" x2="6" y2="14"/>
                         </svg>
                     </span>
-                    <span class="sidebar-label">Log</span>
+                    <span class="sidebar-label">Statistik</span>
                 </button>
 
                 <button class="sidebar-item" data-tab="tab-config" onclick="switchTab('tab-config', this)" aria-label="Config" title="Config">
@@ -154,17 +152,15 @@
             <span class="bottom-nav-label">Kontrol</span>
         </button>
 
-        <button class="bottom-nav-item" data-tab="tab-log" onclick="switchTab('tab-log', this)">
+        <button class="bottom-nav-item" data-tab="tab-stats" onclick="switchTab('tab-stats', this)">
             <span class="bottom-nav-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                    <polyline points="14 2 14 8 20 8"/>
-                    <line x1="16" y1="13" x2="8" y2="13"/>
-                    <line x1="16" y1="17" x2="8" y2="17"/>
-                    <polyline points="10 9 9 9 8 9"/>
+                    <line x1="18" y1="20" x2="18" y2="10"/>
+                    <line x1="12" y1="20" x2="12" y2="4"/>
+                    <line x1="6" y1="20" x2="6" y2="14"/>
                 </svg>
             </span>
-            <span class="bottom-nav-label">Log</span>
+            <span class="bottom-nav-label">Statistik</span>
         </button>
 
         <button class="bottom-nav-item" data-tab="tab-config" onclick="switchTab('tab-config', this)">
@@ -215,6 +211,9 @@
 
             // Persist active tab
             localStorage.setItem('activeTab', tabId);
+
+            // Halaman bisa memuat isi tab saat dibuka (mis. tab Statistik)
+            document.dispatchEvent(new CustomEvent('tabchange', { detail: tabId }));
         }
 
         // Restore last active tab on page load

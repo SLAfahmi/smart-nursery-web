@@ -57,7 +57,7 @@
                 </button>
             </form>
 
-            @if (config('nursery.allow_registration'))
+            @if (\App\Http\Controllers\AuthController::registrationOpen())
                 <div class="auth-footer">
                     Belum punya akun? <a href="{{ route('register') }}" class="auth-link">Daftar Akun Baru</a>
                 </div>

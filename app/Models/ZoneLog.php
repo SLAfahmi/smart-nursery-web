@@ -27,4 +27,16 @@ class ZoneLog extends Model
     {
         return $this->belongsTo(SensorLog::class);
     }
+
+    /**
+     * Batas selisih antar baris (detik) yang dihitung sebagai waktu valve ON. Dipakai tab Statistik dan export.
+     *
+     * Riwayat disimpan tiap history_interval dan setiap status valve berubah, jadi lama valve ON
+     * = selisih waktu dari baris ON ke baris berikutnya zona itu. Selisih dibatasi supaya celah
+     * data (alat offline, batch offline yang jarang) tidak terhitung sebagai waktu menyiram.
+     */
+    public static function maxValveGap(): int
+    {
+        return max(120, 2 * (int) config('nursery.history_interval'));
+    }
 }

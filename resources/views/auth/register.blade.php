@@ -30,8 +30,15 @@
             <form action="{{ route('register') }}" method="POST" class="auth-form">
                 @csrf
                 <div>
+                    <label for="registration_code" class="form-label">Kode Pendaftaran</label>
+                    <input type="text" id="registration_code" name="registration_code" class="form-input" placeholder="Kode dari admin"
+                        maxlength="255" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" required autofocus>
+                    <p class="form-hint">Minta kode ini ke admin nursery.</p>
+                </div>
+
+                <div>
                     <label for="name" class="form-label">Nama Lengkap</label>
-                    <input type="text" id="name" name="name" class="form-input" placeholder="Budi Santoso" value="{{ old('name') }}" maxlength="100" autocomplete="name" required autofocus>
+                    <input type="text" id="name" name="name" class="form-input" placeholder="Budi Santoso" value="{{ old('name') }}" maxlength="100" autocomplete="name" required>
                 </div>
 
                 <div>

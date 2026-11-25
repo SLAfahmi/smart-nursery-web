@@ -44,13 +44,15 @@ class HistoryAndExportTest extends TestCase
         return $this->withHeaders(['X-Device-Token' => self::TOKEN])->postJson($uri, $payload);
     }
 
-    private function storeLog(string $recordedAt, bool $offline = false, float $temperature = 27.0): SensorLog
+    private function storeLog(string $recordedAt, bool $offline = false, float $temperature = 27.0, bool $valveOn = true): SensorLog
     {
         $log = SensorLog::create([
             'temperature' => $temperature, 'humidity' => 70, 'light_level' => 1000, 'system_mode' => 0,
             'relay_main' => false, 'is_offline_data' => $offline, 'recorded_at' => $recordedAt,
         ]);
-        $log->zoneLogs()->create(['zone_id' => 1, 'soil_moisture' => 40.5, 'relay_status' => true, 'state' => 'watering']);
+        $log->zoneLogs()->create([
+            'zone_id' => 1, 'soil_moisture' => 40.5, 'relay_status' => $valveOn, 'state' => $valveOn ? 'watering' : 'idle',
+        ]);
 
         return $log;
     }
@@ -178,6 +180,51 @@ class HistoryAndExportTest extends TestCase
         $this->assertCount(3, array_filter(explode("\n", trim($response->streamedContent()))));
     }
 
+    public function test_export_fills_watering_duration_when_valve_turns_off(): void
+    {
+        $user = User::factory()->create();
+        $valve = fn (string $at, bool $on, bool $offline = false) => $this->storeLog($at, $offline, valveOn: $on);
+
+        // Disimpan acak: durasi dihitung urut waktu rekam alat (batch offline bisa datang belakangan)
+        $valve('2026-10-11 08:01:40', false);
+        $valve('2026-10-10 23:59:00', true);    // mulai sebelum rentang, selesai setelah tengah malam
+        $valve('2026-10-11 00:00:30', false);
+        $valve('2026-10-11 08:00:00', false);
+        $valve('2026-10-11 08:00:05', true);
+        $valve('2026-10-11 08:01:05', true);
+        $valve('2026-10-11 09:00:00', true);
+        $valve('2026-10-11 10:00:00', true, offline: true);   // alat offline 1 jam: celah dihitung maks 120 detik
+        $valve('2026-10-11 10:00:30', false);
+        $valve('2026-10-11 23:59:30', true);    // selesai di luar rentang: durasi belum ada
+        $valve('2026-10-12 00:00:30', false);
+
+        $csv = $this->actingAs($user)->get('/api/export-csv?date=2026-10-11')->assertOk()->streamedContent();
+        $rows = array_map(
+            fn (string $line) => str_getcsv($line, ',', '"', '\\'),
+            array_values(array_filter(explode("\n", trim(substr($csv, 3))))),
+        );
+
+        $column = array_search('Zona 1 Durasi Siram (detik)', $rows[0], true);
+        $this->assertSame(array_search('Zona 1 Status', $rows[0], true) + 1, $column);
+
+        $durations = [];
+        foreach (array_slice($rows, 1) as $row) {
+            $durations[substr($row[0], 11)] = $row[$column];
+        }
+
+        $this->assertSame([
+            '00:00:30' => '90',    // 23:59:00 -> 00:00:30
+            '08:00:00' => '',
+            '08:00:05' => '',
+            '08:01:05' => '',
+            '08:01:40' => '95',
+            '09:00:00' => '',
+            '10:00:00' => '',
+            '10:00:30' => '150',   // 120 (dibatasi) + 30
+            '23:59:30' => '',
+        ], $durations);
+    }
+
     /** @return array<string, \SimpleXMLElement> isi .xlsx (semua bagian XML harus valid) */
     private function readXlsx($response): array
     {
@@ -235,7 +282,9 @@ class HistoryAndExportTest extends TestCase
         $this->assertSame(40.5, $cells['E3']);
         $this->assertSame('ON', $cells['F3']);
         $this->assertSame('watering', $cells['G3']);
-        $this->assertArrayNotHasKey('H3', $cells, 'Zona 2 tanpa data = sel kosong');
+        $this->assertArrayNotHasKey('H3', $cells, 'Valve masih ON = durasi siram kosong');
+        $this->assertArrayNotHasKey('I3', $cells, 'Zona 2 tanpa data = sel kosong');
+        $this->assertStringContainsString('Zona 1 Durasi Siram (detik)', $rows[0]->asXML());
     }
 
     public function test_xlsx_export_for_date_range_and_empty_day(): void

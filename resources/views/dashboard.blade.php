@@ -217,8 +217,134 @@
 </div><!-- /tab-panel kontrol -->
 
 
-<!-- ===== TAB PANEL: LOG ===== -->
-<div class="tab-panel" id="tab-log">
+<!-- ===== TAB PANEL: STATISTIK ===== -->
+<div class="tab-panel" id="tab-stats">
+
+    {{-- Satu filter rentang untuk semua isi di bawahnya; data dimuat saat tab dibuka (StatisticsController) --}}
+    <div class="stats-toolbar">
+        <div class="seg-control" role="group" aria-label="Rentang waktu statistik">
+            <button type="button" class="seg-btn active" data-range="24h" aria-pressed="true" onclick="setStatsRange('24h')">24 Jam</button>
+            <button type="button" class="seg-btn" data-range="7d" aria-pressed="false" onclick="setStatsRange('7d')">7 Hari</button>
+            <button type="button" class="seg-btn" data-range="30d" aria-pressed="false" onclick="setStatsRange('30d')">30 Hari</button>
+        </div>
+        <span class="stats-meta" id="stats-meta">Memuat...</span>
+    </div>
+
+    <div class="stats-body" id="stats-body">
+
+        <div class="section-label">Ringkasan Sensor</div>
+        <div class="sensor-grid">
+            <div class="sensor-card temp-card">
+                <div class="sensor-icon-wrap primary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z" />
+                    </svg>
+                </div>
+                <div>
+                    <div class="sensor-label">Rata Suhu Udara</div>
+                    <div class="sensor-value"><span id="stat-temp">--</span><span class="sensor-unit">°C</span></div>
+                    <div class="stat-range" id="stat-temp-range">min -- · maks --</div>
+                </div>
+            </div>
+
+            <div class="sensor-card light-card">
+                <div class="sensor-icon-wrap secondary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="4" />
+                        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+                    </svg>
+                </div>
+                <div>
+                    <div class="sensor-label">Rata Cahaya</div>
+                    <div class="sensor-value"><span id="stat-light">--</span><span class="sensor-unit">lx</span></div>
+                    <div class="stat-range" id="stat-light-range">min -- · maks --</div>
+                </div>
+            </div>
+
+            <div class="sensor-card hum-card">
+                <div class="sensor-icon-wrap tertiary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
+                    </svg>
+                </div>
+                <div>
+                    <div class="sensor-label">Rata Lembab Udara</div>
+                    <div class="sensor-value"><span id="stat-hum">--</span><span class="sensor-unit">%</span></div>
+                    <div class="stat-range" id="stat-hum-range">min -- · maks --</div>
+                </div>
+            </div>
+
+            <div class="sensor-card soil-card">
+                <div class="sensor-icon-wrap soil">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
+                    </svg>
+                </div>
+                <div>
+                    <div class="sensor-label">Rata Lembab Tanah</div>
+                    <div class="sensor-value"><span id="stat-soil">--</span><span class="sensor-unit">%</span></div>
+                    <div class="stat-range" id="stat-soil-range">min -- · maks --</div>
+                </div>
+            </div>
+        </div><!-- /sensor-grid -->
+
+        <div class="section-label">Tren Iklim</div>
+        <div class="chart-grid">
+            <div class="chart-card">
+                <div class="chart-head"><div class="chart-title">Suhu Udara <span class="chart-unit">°C</span></div></div>
+                <div class="chart-box" id="chart-temp"></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-head"><div class="chart-title">Kelembaban Udara <span class="chart-unit">%</span></div></div>
+                <div class="chart-box" id="chart-hum"></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-head"><div class="chart-title">Cahaya <span class="chart-unit">lx</span></div></div>
+                <div class="chart-box" id="chart-light"></div>
+            </div>
+        </div>
+
+        <div class="section-label">Kelembaban Tanah per Zona</div>
+        <div class="chart-card chart-card--solo">
+            <div class="chart-head">
+                <div class="chart-title">Kelembaban Tanah <span class="chart-unit">%</span></div>
+                <div class="chart-legend" id="soil-legend"></div>
+            </div>
+            <div class="chart-box chart-box--tall" id="chart-soil"></div>
+        </div>
+
+        <details class="stats-details">
+            <summary>Lihat tabel data per waktu</summary>
+            <div class="table-scroll">
+                <table class="audit-table">
+                    <thead id="stats-data-head"></thead>
+                    <tbody id="stats-data-body"></tbody>
+                </table>
+            </div>
+        </details>
+
+        <div class="section-label">Rekap Penyiraman</div>
+        <div class="audit-table-card" style="margin-top:0; margin-bottom:1.5rem;">
+            <div class="table-scroll">
+                <table class="audit-table">
+                    <thead>
+                        <tr>
+                            <th>Zona</th>
+                            <th class="num">Penyiraman</th>
+                            <th class="num">Total Durasi</th>
+                            <th class="num">Rata Durasi</th>
+                            <th class="num">Rata Tanah</th>
+                        </tr>
+                    </thead>
+                    <tbody id="irrigation-body">
+                        <tr><td colspan="5" class="table-empty">Memuat...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="form-hint" style="margin:0.6rem 0 0;">Durasi diperkirakan dari riwayat status valve yang tercatat di server.</p>
+        </div>
+
+    </div><!-- /stats-body -->
 
     <div class="section-label">Riwayat Aktivitas</div>
 
@@ -256,7 +382,7 @@
         </div>
     </div>
 
-</div><!-- /tab-panel log -->
+</div><!-- /tab-panel statistik -->
 
 
 <!-- ===== TAB PANEL: CONFIG ===== -->
@@ -499,6 +625,11 @@
         // FormData (upload file): browser sendiri yang mengisi Content-Type multipart beserta boundary
         if (options.body && !(options.body instanceof FormData)) headers['Content-Type'] = 'application/json';
         const res = await fetch(url, { ...options, headers });
+        // Sesi habis / akses dicabut admin: kembali ke halaman login
+        if (res.status === 401) {
+            window.location.href = "{{ route('login') }}";
+            throw new Error('Sesi berakhir, silakan login kembali.');
+        }
         const data = await res.json().catch(() => ({}));
         if (!res.ok || data.status === 'error') throw new Error(data.message || ('HTTP ' + res.status));
         return data;
@@ -1092,7 +1223,345 @@
         });
     }
 
+    // ============ STATISTIK ============
+    // Data dari StatisticsController; dimuat saat tab Statistik dibuka, bukan lewat polling 3 detik
+    const STATS_URL = "{{ route('dashboard.statistics') }}";
+    const STATS_RANGES = ['24h', '7d', '30d'];
+    const STATS_STALE_MS = 60000;
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const compactNumber = new Intl.NumberFormat('id-ID', { notation: 'compact', maximumFractionDigits: 1 });
+    let statsRange = '24h';
+    let statsData = null;
+    let statsLoadedAt = 0;
+    let statsRequestId = 0;   // balasan permintaan lama diabaikan jika rentang cepat diganti
+
+    try {
+        const saved = localStorage.getItem('statsRange');
+        if (STATS_RANGES.includes(saved)) statsRange = saved;
+    } catch (e) { /* penyimpanan browser diblokir: pakai 24 jam */ }
+
+    // Warna mengikuti nomor zona (urutan palet tetap, lihat --chart-zone-* di style.css). Firmware maksimal 5 zona.
+    function zoneColor(zone) {
+        return `var(--chart-zone-${((zone - 1) % 8) + 1})`;
+    }
+
+    function svgEl(tag, attrs, parent) {
+        const el = document.createElementNS(SVG_NS, tag);
+        Object.entries(attrs || {}).forEach(([key, value]) => el.setAttribute(key, value));
+        if (parent) parent.appendChild(el);
+        return el;
+    }
+
+    function lastValueIndex(values) {
+        for (let i = values.length - 1; i >= 0; i--) if (values[i] != null) return i;
+        return -1;
+    }
+
+    // Batas sumbu Y dengan kelipatan bulat (1 / 2 / 2,5 / 5 × 10^n)
+    function niceScale(lo, hi, count = 4) {
+        if (lo === hi) { lo = lo >= 1 ? lo - 1 : 0; hi += 1; }
+        const raw = (hi - lo) / count;
+        const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+        const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw - 1e-9);
+        const min = Math.floor(lo / step + 1e-9) * step;
+        const max = Math.ceil(hi / step - 1e-9) * step;
+        const ticks = [];
+        for (let v = min; v <= max + step / 2; v += step) ticks.push(Math.round(v * 1e6) / 1e6);
+        return { min, max, ticks };
+    }
+
+    function axisNumber(v) {
+        if (Math.abs(v) >= 10000) return compactNumber.format(v);
+        return Number.isInteger(v) ? String(v) : v.toFixed(1);
+    }
+
+    // Digambar ulang saat lebar kartu berubah (putar layar, sidebar, tab dibuka)
+    const chartObserver = new ResizeObserver(entries => {
+        entries.forEach(entry => { if (entry.target._chart) drawLineChart(entry.target); });
+    });
+
+    function renderLineChart(box, options) {
+        box._chart = options;
+        if (!box._observed) {
+            chartObserver.observe(box);
+            box._observed = true;
+        }
+        drawLineChart(box);
+    }
+
+    // Grafik garis SVG: satu sumbu Y, garis 2px yang putus pada data kosong (null),
+    // crosshair + tooltip semua seri saat hover/sentuh, panah kiri/kanan saat grafik difokus.
+    function drawLineChart(box) {
+        const width = box.clientWidth;
+        if (!width) return;   // tab tersembunyi; ResizeObserver menggambar saat tampil
+        const height = box.clientHeight;
+        const { label, ticks, tips, series, unit = '', digits = 1, yMin, yMax, directLabels = false } = box._chart;
+        box.replaceChildren();
+
+        const values = series.flatMap(s => s.values).filter(v => v != null);
+        if (!values.length) {
+            const empty = document.createElement('div');
+            empty.className = 'chart-empty';
+            empty.textContent = 'Belum ada data pada rentang ini.';
+            box.appendChild(empty);
+            return;
+        }
+
+        const pad = { top: 8, right: directLabels ? 64 : 14, bottom: 22, left: 38 };
+        const plotW = Math.max(10, width - pad.left - pad.right);
+        const plotH = Math.max(10, height - pad.top - pad.bottom);
+        // yMin/yMax = rentang minimal (mis. tanah 0-100%); data di luar itu tetap muat
+        const scale = niceScale(Math.min(yMin ?? Infinity, ...values), Math.max(yMax ?? -Infinity, ...values));
+        const count = ticks.length;
+        const x = i => pad.left + (count === 1 ? plotW / 2 : (i * plotW) / (count - 1));
+        const y = v => pad.top + plotH - ((v - scale.min) / (scale.max - scale.min)) * plotH;
+
+        const svg = svgEl('svg', {
+            width, height, viewBox: `0 0 ${width} ${height}`, tabindex: 0, role: 'img',
+            'aria-label': `${label}. Tekan panah kiri atau kanan untuk membaca nilai.`,
+        });
+
+        scale.ticks.forEach(v => {
+            const yy = Math.round(y(v)) + 0.5;
+            svgEl('line', { class: v === scale.min ? 'chart-baseline' : 'chart-grid-line', x1: pad.left, x2: pad.left + plotW, y1: yy, y2: yy }, svg);
+            svgEl('text', { class: 'chart-axis-label', x: pad.left - 6, y: yy, 'text-anchor': 'end', 'dominant-baseline': 'middle' }, svg)
+                .textContent = axisNumber(v);
+        });
+
+        // Label X hanya saat teksnya berganti (7 hari: awal tiap tanggal), dijarangkan minimal 56px
+        let lastTickX = -Infinity;
+        for (let i = 0; i < count; i++) {
+            if ((i > 0 && ticks[i] === ticks[i - 1]) || x(i) - lastTickX < 56) continue;
+            lastTickX = x(i);
+            svgEl('text', { class: 'chart-axis-label', x: x(i), y: height - 6, 'text-anchor': 'middle' }, svg).textContent = ticks[i];
+        }
+
+        // Bucket terakhir masih berjalan (rata-ratanya belum lengkap): segmen ke titik itu digambar putus-putus
+        const line = (d, color, dashed) => svgEl('path', {
+            d, fill: 'none', 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round',
+            ...(dashed ? { 'stroke-dasharray': '3 4' } : {}), style: `stroke:${color}`,
+        }, svg);
+        series.forEach(s => {
+            let d = '';
+            s.values.forEach((v, i) => {
+                if (v == null) return;
+                const prevMissing = i === 0 || s.values[i - 1] == null;
+                const nextMissing = i === count - 1 || s.values[i + 1] == null;
+                const point = `${x(i).toFixed(1)},${y(v).toFixed(1)}`;
+                if (i === count - 1 && !prevMissing) {
+                    line(`M${x(i - 1).toFixed(1)},${y(s.values[i - 1]).toFixed(1)}L${point}`, s.color, true);
+                } else {
+                    d += `${prevMissing ? 'M' : 'L'}${point}`;
+                }
+                // Titik tunggal di antara data kosong tidak membentuk garis: tampilkan sebagai titik
+                if (prevMissing && nextMissing) svgEl('circle', { cx: x(i), cy: y(v), r: 2.5, style: `fill:${s.color}` }, svg);
+            });
+            if (d) line(d, s.color, false);
+        });
+
+        // Label nama seri di ujung kanan garis, digeser agar tidak bertumpuk
+        if (directLabels) {
+            const labels = series
+                .map(s => { const last = lastValueIndex(s.values); return last < 0 ? null : { s, y: y(s.values[last]) }; })
+                .filter(Boolean)
+                .sort((a, b) => a.y - b.y);
+            for (let k = 1; k < labels.length; k++) labels[k].y = Math.max(labels[k].y, labels[k - 1].y + 13);
+            const overflow = labels.length ? labels[labels.length - 1].y - (pad.top + plotH) : 0;
+            if (overflow > 0) labels.forEach(l => { l.y -= overflow; });
+            const lx = pad.left + plotW + 6;
+            labels.forEach(l => {
+                svgEl('line', { x1: lx, x2: lx + 8, y1: l.y, y2: l.y, 'stroke-width': 2, style: `stroke:${l.s.color}` }, svg);
+                svgEl('text', { class: 'chart-direct-label', x: lx + 12, y: l.y, 'dominant-baseline': 'middle' }, svg).textContent = l.s.name;
+            });
+        }
+
+        const crosshair = svgEl('line', { class: 'chart-crosshair', y1: pad.top, y2: pad.top + plotH, visibility: 'hidden' }, svg);
+        const dots = svgEl('g', {}, svg);
+        // Area sentuh selebar grafik: pembaca cukup menunjuk waktu, tidak perlu mengenai garis
+        const overlay = svgEl('rect', { x: pad.left - 8, y: 0, width: plotW + 16, height: pad.top + plotH, fill: 'transparent' }, svg);
+        const tooltip = document.createElement('div');
+        tooltip.className = 'chart-tooltip';
+        tooltip.hidden = true;
+        box.append(svg, tooltip);
+
+        let active = -1;
+        const show = i => {
+            active = Math.max(0, Math.min(count - 1, i));
+            const cx = x(active);
+            crosshair.setAttribute('x1', cx);
+            crosshair.setAttribute('x2', cx);
+            crosshair.setAttribute('visibility', 'visible');
+            dots.replaceChildren();
+
+            const title = document.createElement('div');
+            title.className = 'chart-tooltip-title';
+            title.textContent = tips[active];
+            const rows = series.map(s => {
+                const v = s.values[active];
+                if (v != null) svgEl('circle', { class: 'chart-dot', cx, cy: y(v), r: 4, style: `fill:${s.color}` }, dots);
+                const row = document.createElement('div');
+                row.className = 'chart-tooltip-row';
+                const key = document.createElement('span');
+                key.className = 'chart-key';
+                key.style.background = s.color;
+                const value = document.createElement('strong');
+                value.textContent = v == null ? '--' : fmt(v, digits) + unit;
+                const name = document.createElement('span');
+                name.textContent = s.name;
+                row.append(key, value, name);
+                return row;
+            });
+            tooltip.replaceChildren(title, ...rows);
+            tooltip.hidden = false;
+
+            // Di kanan crosshair; pindah ke kiri jika tidak muat
+            const tw = tooltip.offsetWidth;
+            const left = cx + 12 + tw <= width ? cx + 12 : Math.max(0, cx - 12 - tw);
+            tooltip.style.transform = `translate(${Math.round(left)}px, ${pad.top}px)`;
+        };
+        const hide = () => {
+            active = -1;
+            crosshair.setAttribute('visibility', 'hidden');
+            dots.replaceChildren();
+            tooltip.hidden = true;
+        };
+        const indexAt = clientX => {
+            const rect = svg.getBoundingClientRect();
+            return Math.round(((clientX - rect.left - pad.left) / plotW) * (count - 1));
+        };
+
+        overlay.addEventListener('pointerdown', e => show(indexAt(e.clientX)));
+        overlay.addEventListener('pointermove', e => show(indexAt(e.clientX)));
+        // Di layar sentuh tooltip tetap tampil setelah jari diangkat; hilang saat menyentuh tempat lain (blur)
+        overlay.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') hide(); });
+        svg.addEventListener('focus', () => {
+            if (active < 0) show(Math.max(...series.map(s => lastValueIndex(s.values))));
+        });
+        svg.addEventListener('blur', hide);
+        svg.addEventListener('keydown', e => {
+            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+            e.preventDefault();
+            show((active < 0 ? count - 1 : active) + (e.key === 'ArrowRight' ? 1 : -1));
+        });
+    }
+
+    function setStatTile(key, stat, digits) {
+        document.getElementById(`stat-${key}`).textContent = fmt(stat?.avg, digits);
+        document.getElementById(`stat-${key}-range`).textContent = `min ${fmt(stat?.min, digits)} · maks ${fmt(stat?.max, digits)}`;
+    }
+
+    function renderStats(data) {
+        statsData = data;
+        const { ticks, tips } = data.labels;
+        const offline = data.offline_count ? ` (${data.offline_count} dari buffer offline)` : '';
+        document.getElementById('stats-meta').textContent = `${data.record_count} data tercatat${offline} · diperbarui ${data.generated_at}`;
+
+        setStatTile('temp', data.summary.temperature, 1);
+        setStatTile('hum', data.summary.humidity, 1);
+        setStatTile('light', data.summary.light_level, 0);
+        setStatTile('soil', data.summary.soil, 1);
+
+        // Satu seri per grafik (tanpa sumbu ganda); judul kartu sudah menamai serinya
+        const single = (label, name, values, unit, digits) => ({
+            label, ticks, tips, unit, digits, series: [{ name, color: 'var(--chart-single)', values }],
+        });
+        renderLineChart(document.getElementById('chart-temp'), single('Grafik suhu udara', 'Suhu', data.series.temperature, ' °C', 1));
+        renderLineChart(document.getElementById('chart-hum'), single('Grafik kelembaban udara', 'Lembab udara', data.series.humidity, '%', 1));
+        renderLineChart(document.getElementById('chart-light'), single('Grafik cahaya', 'Cahaya', data.series.light_level, ' lx', 0));
+
+        const soilSeries = [];
+        for (let i = 1; i <= NUM_ZONES; i++) {
+            soilSeries.push({ name: `Zona ${i}`, color: zoneColor(i), values: data.series.soil[i] || [] });
+        }
+        renderLineChart(document.getElementById('chart-soil'), {
+            label: 'Grafik kelembaban tanah per zona', ticks, tips, unit: '%', digits: 1, yMin: 0, yMax: 100,
+            series: soilSeries, directLabels: soilSeries.length <= 4,
+        });
+        document.getElementById('soil-legend').innerHTML = soilSeries.map(s =>
+            `<span class="chart-legend-item"><span class="chart-key" style="background:${s.color}"></span>${esc(s.name)}</span>`
+        ).join('');
+
+        renderIrrigationTable(data.irrigation);
+        renderStatsDataTable(data, soilSeries);
+    }
+
+    function renderIrrigationTable(rows) {
+        document.getElementById('irrigation-body').innerHTML = rows.map(r => `<tr>
+            <td><span class="chart-legend-item"><span class="chart-key" style="background:${zoneColor(r.zone)}"></span><strong>Zona ${esc(r.zone)}</strong></span></td>
+            <td class="num">${esc(r.count)} kali</td>
+            <td class="num">${r.count ? esc(formatDuration(r.total_seconds)) : '--'}</td>
+            <td class="num">${r.avg_seconds !== null ? esc(formatDuration(r.avg_seconds)) : '--'}</td>
+            <td class="num">${r.soil_avg === null ? '--' : fmt(r.soil_avg) + '%'}</td>
+        </tr>`).join('');
+    }
+
+    // Tampilan tabel untuk semua grafik: satu baris per bucket waktu, terbaru di atas
+    function renderStatsDataTable(data, soilSeries) {
+        const head = ['Waktu', 'Suhu (°C)', 'Lembab Udara (%)', 'Cahaya (lx)', ...soilSeries.map(s => `${s.name} Tanah (%)`)];
+        const digits = [1, 1, 0, ...soilSeries.map(() => 1)];
+        document.getElementById('stats-data-head').innerHTML =
+            '<tr>' + head.map((h, i) => `<th${i ? ' class="num"' : ''}>${esc(h)}</th>`).join('') + '</tr>';
+
+        const rows = [];
+        for (let i = data.labels.tips.length - 1; i >= 0; i--) {
+            const cells = [data.series.temperature[i], data.series.humidity[i], data.series.light_level[i], ...soilSeries.map(s => s.values[i])];
+            if (cells.every(v => v == null)) continue;
+            rows.push(`<tr><td class="log-time">${esc(data.labels.tips[i])}</td>`
+                + cells.map((v, k) => `<td class="num">${fmt(v, digits[k])}</td>`).join('') + '</tr>');
+        }
+        document.getElementById('stats-data-body').innerHTML = rows.length
+            ? rows.join('')
+            : `<tr><td colspan="${head.length}" class="table-empty">Belum ada data pada rentang ini.</td></tr>`;
+    }
+
+    // quiet = penyegaran latar (tanpa meredupkan isi)
+    async function loadStatistics(force = false, quiet = false) {
+        const fresh = statsData && statsData.range === statsRange && Date.now() - statsLoadedAt < STATS_STALE_MS;
+        if (!force && fresh) return;
+
+        const requestId = ++statsRequestId;
+        const body = document.getElementById('stats-body');
+        if (!quiet) body.classList.add('is-loading');
+        try {
+            const data = await api(STATS_URL + '?range=' + encodeURIComponent(statsRange));
+            if (requestId !== statsRequestId) return;
+            statsLoadedAt = Date.now();
+            renderStats(data);
+        } catch (e) {
+            if (requestId !== statsRequestId) return;
+            document.getElementById('stats-meta').textContent = 'Gagal memuat statistik';
+            if (!quiet) toast(e.message, 'error');
+        } finally {
+            if (requestId === statsRequestId) body.classList.remove('is-loading');
+        }
+    }
+
+    function markStatsRange() {
+        document.querySelectorAll('.seg-btn[data-range]').forEach(btn => {
+            const on = btn.dataset.range === statsRange;
+            btn.classList.toggle('active', on);
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+    }
+
+    function setStatsRange(range) {
+        if (!STATS_RANGES.includes(range)) return;
+        statsRange = range;
+        try { localStorage.setItem('statsRange', range); } catch (e) { /* abaikan */ }
+        markStatsRange();
+        loadStatistics(true);
+    }
+
+    function statsTabActive() {
+        return document.getElementById('tab-stats').classList.contains('tab-panel--active');
+    }
+
+    // Dimuat saat tab dibuka (switchTab di layout mengirim event ini), disegarkan tiap menit selama tab terbuka
+    document.addEventListener('tabchange', e => { if (e.detail === 'tab-stats') loadStatistics(); });
+    setInterval(() => { if (!document.hidden && statsTabActive()) loadStatistics(false, true); }, STATS_STALE_MS);
+
     // ============ INIT ============
+    markStatsRange();
     renderScheduleConfig();
     renderModeDetail({
         system_mode: desiredMode,

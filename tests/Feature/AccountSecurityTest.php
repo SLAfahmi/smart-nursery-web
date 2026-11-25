@@ -27,12 +27,17 @@ class AccountSecurityTest extends TestCase
         $this->assertDatabaseMissing('users', ['email' => 'x@gmail.com']);
     }
 
-    public function test_registration_works_when_enabled(): void
+    public function test_registration_works_with_correct_code(): void
     {
-        config(['nursery.allow_registration' => true]);
+        config(['nursery.registration_code' => 'KodeKebun2026']);
 
         $this->get('/login')->assertSee('Daftar Akun Baru');
+        $this->get('/register')->assertOk()
+            ->assertSee('name="registration_code"', false)
+            ->assertDontSee('KodeKebun2026');
+
         $this->post('/register', [
+            'registration_code' => '  KodeKebun2026 ', // spasi dari copy-paste WhatsApp dibuang
             'name' => 'Operator',
             'email' => 'Op@Gmail.com',
             'password' => 'rahasia123',
@@ -41,13 +46,65 @@ class AccountSecurityTest extends TestCase
 
         // Disimpan huruf kecil agar login tidak bergantung pada huruf besar/kecil
         $this->assertDatabaseHas('users', ['email' => 'op@gmail.com']);
+        $this->assertAuthenticated();
+    }
+
+    public function test_registration_rejects_wrong_or_missing_code(): void
+    {
+        config(['nursery.registration_code' => 'KodeKebun2026']);
+        User::factory()->create(['email' => 'sudahada@gmail.com']);
+
+        $valid = [
+            'name' => 'Penyusup',
+            'email' => 'penyusup@gmail.com',
+            'password' => 'rahasia123',
+            'password_confirmation' => 'rahasia123',
+        ];
+
+        $this->post('/register', $valid)
+            ->assertSessionHasErrors('registration_code');
+
+        foreach (['kodekebun2026', 'KodeKebun', 'KodeKebun2026x'] as $wrong) {
+            $this->post('/register', [...$valid, 'registration_code' => $wrong])
+                ->assertSessionHasErrors(['registration_code' => 'Kode pendaftaran salah. Minta kode ke admin nursery.']);
+        }
+
+        // Tanpa kode yang benar, tidak bocor info apakah email sudah terdaftar
+        $this->post('/register', [...$valid, 'registration_code' => 'salah123', 'email' => 'sudahada@gmail.com'])
+            ->assertSessionHasErrors('registration_code')
+            ->assertSessionDoesntHaveErrors('email');
+
+        // Kode yang diketik tidak disimpan ke session (old input)
+        $this->post('/register', [...$valid, 'registration_code' => 'salah123']);
+        $this->assertNull(session()->getOldInput('registration_code'));
+
+        $this->assertGuest();
+        $this->assertDatabaseMissing('users', ['email' => 'penyusup@gmail.com']);
+    }
+
+    public function test_short_registration_code_keeps_registration_closed(): void
+    {
+        $original = [$_SERVER['REGISTRATION_CODE'] ?? null, $_ENV['REGISTRATION_CODE'] ?? null];
+
+        try {
+            foreach (['' => null, 'pendek' => null, '1234567' => null, '  KodeKebun2026  ' => 'KodeKebun2026'] as $env => $expected) {
+                $_SERVER['REGISTRATION_CODE'] = $_ENV['REGISTRATION_CODE'] = (string) $env;
+                $this->assertSame($expected, (require config_path('nursery.php'))['registration_code'], "REGISTRATION_CODE='{$env}'");
+            }
+        } finally {
+            [$server, $envConst] = $original;
+            if ($server === null) unset($_SERVER['REGISTRATION_CODE']); else $_SERVER['REGISTRATION_CODE'] = $server;
+            if ($envConst === null) unset($_ENV['REGISTRATION_CODE']); else $_ENV['REGISTRATION_CODE'] = $envConst;
+        }
     }
 
     public function test_registration_rejects_non_gmail_and_weak_input(): void
     {
-        config(['nursery.allow_registration' => true]);
+        config(['nursery.registration_code' => 'KodeKebun2026']);
+        $code = ['registration_code' => 'KodeKebun2026'];
 
         $this->post('/register', [
+            ...$code,
             'name' => 'Operator',
             'email' => 'op@example.com',
             'password' => 'rahasia123',
@@ -55,6 +112,7 @@ class AccountSecurityTest extends TestCase
         ])->assertSessionHasErrors('email');
 
         $this->post('/register', [
+            ...$code,
             'name' => 'Operator',
             'email' => 'op@gmail.com',
             'password' => 'pendek',
@@ -62,6 +120,7 @@ class AccountSecurityTest extends TestCase
         ])->assertSessionHasErrors('password');
 
         $this->post('/register', [
+            ...$code,
             'name' => str_repeat('a', 101),
             'email' => 'op@gmail.com',
             'password' => str_repeat('p', 73),

@@ -17,6 +17,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(SecurityHeaders::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Kode pendaftaran tidak ikut disimpan ke session saat validasi gagal (seperti password)
+        $exceptions->dontFlash(['registration_code']);
+
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
         );

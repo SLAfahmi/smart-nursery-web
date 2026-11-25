@@ -33,9 +33,15 @@ return [
     // Riwayat lebih lama dari ini dihapus oleh `php artisan model:prune` (terjadwal harian)
     'history_retention_days' => (int) env('NURSERY_HISTORY_RETENTION_DAYS', 90),
 
-    // Halaman register. Mati secara default: situs publik, dan setiap akun bisa mengendalikan pompa.
-    // Akun baru dibuat admin lewat `php artisan nursery:user`.
-    'allow_registration' => (bool) env('ALLOW_REGISTRATION', false),
+    // Kode pendaftaran bersama. Situs ini publik dan setiap akun bisa mengendalikan pompa, jadi
+    // halaman "Daftar Akun" hanya aktif jika REGISTRATION_CODE diisi minimal 8 karakter
+    // (kode pendek mudah ditebak). Kosong / terlalu pendek = pendaftaran mati (null).
+    // Admin membagikan kode ini sendiri (mis. lewat WhatsApp). Kode bocor? Ganti nilainya di .env.
+    // Akun juga tetap bisa dibuat admin lewat `php artisan nursery:user`.
+    'registration_code' => (function () {
+        $code = trim((string) env('REGISTRATION_CODE', ''));
+        return strlen($code) >= 8 ? $code : null;
+    })(),
 
     // Hanya email dengan domain ini yang boleh login / dibuat (login, register, `nursery:user`, seeder).
     'email_domain' => env('ALLOWED_EMAIL_DOMAIN', 'gmail.com'),

@@ -7,6 +7,7 @@ use App\Models\DeviceControl;
 use App\Models\DeviceState;
 use App\Models\FirmwareRelease;
 use App\Models\SensorLog;
+use App\Models\ZoneLog;
 use App\Support\XlsxWriter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,6 +18,9 @@ use Illuminate\Validation\Rule;
 class DashboardController extends Controller
 {
     private const MODE_NAMES = [0 => 'Auto (Fuzzy)', 1 => 'Manual', 2 => 'Schedule'];
+
+    /** Export ikut membaca riwayat sejauh ini (detik) sebelum awal rentang, untuk durasi siram yang melewati awal rentang */
+    private const EXPORT_LOOKBACK = 3600;
 
     public function index()
     {
@@ -318,7 +322,7 @@ class DashboardController extends Controller
     {
         $header = ['Waktu', 'Suhu (°C)', 'Kelembaban Udara (%)', 'Cahaya (lx)'];
         foreach (range(1, config('nursery.zones')) as $zone) {
-            array_push($header, "Zona {$zone} Tanah (%)", "Zona {$zone} Valve", "Zona {$zone} Status");
+            array_push($header, "Zona {$zone} Tanah (%)", "Zona {$zone} Valve", "Zona {$zone} Status", "Zona {$zone} Durasi Siram (detik)");
         }
 
         return array_merge($header, ['Pompa', 'Mode', 'Sumber']);
@@ -327,22 +331,50 @@ class DashboardController extends Controller
     /**
      * Satu baris per log, kolom sesuai exportHeader(). Kolom pertama Carbon (atau null), nilai kosong null.
      * Diambil per 500 baris agar memori tetap kecil walau rentangnya panjang.
+     *
+     * Durasi siram diisi di baris saat valve zona kembali OFF: lama valve ON sesi itu (detik),
+     * dihitung sama seperti Rekap Penyiraman di tab Statistik.
      */
     private function exportRows(Carbon $from, Carbon $to): \Generator
     {
         $zoneCount = config('nursery.zones');
+        $maxGap = ZoneLog::maxValveGap();
+        $valves = [];   // zone_id => [waktu baris terakhir, valve ON, detik ON sesi berjalan]
 
         $logs = SensorLog::with('zoneLogs')
-            ->whereBetween('recorded_at', [$from, $to])
+            ->whereBetween('recorded_at', [$from->copy()->subSeconds(self::EXPORT_LOOKBACK), $to])
             ->orderBy('recorded_at')->orderBy('id')
             ->lazy(500);
 
         foreach ($logs as $log) {
-            $row = [$log->recorded_at, $log->temperature, $log->humidity, $log->light_level];
+            $timestamp = $log->recorded_at->getTimestamp();
             $zones = $log->zoneLogs->keyBy('zone_id');
+
+            $durations = [];
+            foreach ($zones as $zoneId => $z) {
+                [$prevTimestamp, $prevOn, $seconds] = $valves[$zoneId] ?? [null, false, 0];
+                if ($prevOn) {
+                    $seconds += min($timestamp - $prevTimestamp, $maxGap);
+                    if (!$z->relay_status) {
+                        $durations[$zoneId] = $seconds;
+                    }
+                }
+                $valves[$zoneId] = [$timestamp, $z->relay_status, $z->relay_status ? $seconds : 0];
+            }
+
+            if ($log->recorded_at->lt($from)) {
+                continue;   // riwayat sebelum rentang hanya untuk durasi siram
+            }
+
+            $row = [$log->recorded_at, $log->temperature, $log->humidity, $log->light_level];
             foreach (range(1, $zoneCount) as $zone) {
                 $z = $zones->get($zone);
-                array_push($row, $z?->soil_moisture, $z ? ($z->relay_status ? 'ON' : 'OFF') : null, $z?->state);
+                array_push($row,
+                    $z?->soil_moisture,
+                    $z ? ($z->relay_status ? 'ON' : 'OFF') : null,
+                    $z?->state,
+                    $durations[$zone] ?? null,
+                );
             }
             array_push($row,
                 $log->relay_main ? 'ON' : 'OFF',

@@ -2302,3 +2302,307 @@ input[type="time"]::-webkit-date-and-time-value {
         border-radius: var(--radius-lg);
     }
 }
+
+/* ============================================
+   TAB STATISTIK
+   ============================================ */
+/* Warna grafik. Zona = palet kategorikal berurutan tetap (diuji aman buta warna terhadap
+   kartu putih & kartu gelap); warna mengikuti zona, bukan urutan. */
+:root {
+    --chart-single: #1a6b43;
+    --chart-zone-1: #2a78d6;
+    --chart-zone-2: #eb6834;
+    --chart-zone-3: #1baf7a;
+    --chart-zone-4: #eda100;
+    --chart-zone-5: #e87ba4;
+    --chart-zone-6: #008300;
+    --chart-zone-7: #6250d6;
+    --chart-zone-8: #e34948;
+}
+
+[data-theme="dark"] {
+    --chart-single: #4caf82;
+    --chart-zone-1: #3987e5;
+    --chart-zone-2: #d95926;
+    --chart-zone-3: #199e70;
+    --chart-zone-4: #c98500;
+    --chart-zone-5: #d55181;
+    --chart-zone-6: #0ca30c;
+    --chart-zone-7: #9085e9;
+    --chart-zone-8: #e66767;
+}
+
+.stats-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.seg-control {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    background: var(--clr-surface-card);
+    border: 1px solid var(--clr-outline-var);
+    border-radius: var(--radius-full);
+    box-shadow: var(--shadow-sm);
+}
+
+.seg-btn {
+    min-height: 2.25rem;
+    padding: 0.4rem 0.95rem;
+    border: 0;
+    border-radius: var(--radius-full);
+    background: transparent;
+    color: var(--clr-on-surface-var);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color var(--transition), color var(--transition);
+}
+
+.seg-btn:hover {
+    background: var(--clr-surface-low);
+    color: var(--clr-on-surface);
+}
+
+.seg-btn.active {
+    background: var(--clr-primary);
+    color: #fff;
+}
+
+.seg-btn:focus-visible {
+    outline: 2px solid var(--clr-primary);
+    outline-offset: 2px;
+}
+
+.stats-meta {
+    font-size: 0.72rem;
+    color: var(--clr-on-surface-var);
+}
+
+/* Saat memuat ulang, isi lama tetap tampil (tanpa lompatan layout) */
+.stats-body {
+    transition: opacity var(--transition);
+}
+
+.stats-body.is-loading {
+    opacity: 0.55;
+}
+
+.stat-range {
+    margin-top: 0.4rem;
+    font-size: 0.68rem;
+    color: var(--clr-on-surface-var);
+    font-variant-numeric: tabular-nums;
+}
+
+.chart-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+@container content (min-width: 54rem) {
+    .chart-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+.chart-card {
+    min-width: 0;
+    padding: 0.875rem 1rem 0.75rem;
+    background: var(--clr-surface-card);
+    border: 1px solid var(--clr-outline-var);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+}
+
+.chart-card--solo {
+    margin-bottom: 0.75rem;
+}
+
+.chart-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.chart-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--clr-on-surface);
+}
+
+.chart-unit {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--clr-on-surface-var);
+}
+
+.chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.85rem;
+    font-size: 0.72rem;
+    color: var(--clr-on-surface-var);
+}
+
+.chart-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+}
+
+/* Kunci seri berupa garis pendek (grafik garis) */
+.chart-key {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 0.9rem;
+    height: 2px;
+    border-radius: 1px;
+}
+
+.chart-box {
+    position: relative;
+    height: 180px;
+}
+
+.chart-box--tall {
+    height: 240px;
+}
+
+.chart-box svg {
+    display: block;
+    overflow: visible;
+    touch-action: pan-y;
+}
+
+.chart-box svg:focus-visible {
+    outline: 2px solid var(--clr-primary);
+    outline-offset: 4px;
+    border-radius: var(--radius-xs);
+}
+
+.chart-grid-line {
+    stroke: var(--clr-outline-var);
+    stroke-width: 1;
+}
+
+.chart-baseline {
+    stroke: var(--clr-outline);
+    stroke-width: 1;
+}
+
+.chart-crosshair {
+    stroke: var(--clr-on-surface-var);
+    stroke-width: 1;
+}
+
+.chart-axis-label {
+    font-size: 10px;
+    fill: var(--clr-on-surface-var);
+    font-variant-numeric: tabular-nums;
+}
+
+.chart-direct-label {
+    font-size: 11px;
+    font-weight: 600;
+    fill: var(--clr-on-surface);
+}
+
+.chart-dot {
+    stroke: var(--clr-surface-card);
+    stroke-width: 2;
+}
+
+.chart-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    text-align: center;
+    font-size: 0.78rem;
+    color: var(--clr-on-surface-var);
+}
+
+.chart-tooltip {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 5;
+    min-width: 8rem;
+    padding: 0.5rem 0.65rem;
+    background: var(--clr-surface-card);
+    border: 1px solid var(--clr-outline-var);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-md);
+    font-size: 0.72rem;
+    color: var(--clr-on-surface-var);
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.chart-tooltip[hidden] {
+    display: none;
+}
+
+.chart-tooltip-title {
+    margin-bottom: 0.3rem;
+    font-weight: 700;
+}
+
+.chart-tooltip-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    line-height: 1.6;
+}
+
+.chart-tooltip-row strong {
+    color: var(--clr-on-surface);
+    font-variant-numeric: tabular-nums;
+}
+
+.stats-details {
+    margin-bottom: 1.5rem;
+    font-size: 0.78rem;
+}
+
+.stats-details summary {
+    padding: 0.25rem 0;
+    font-weight: 700;
+    color: var(--clr-primary);
+    cursor: pointer;
+}
+
+.stats-details .table-scroll {
+    max-height: 22rem;
+    margin-top: 0.5rem;
+    overflow-y: auto;
+    background: var(--clr-surface-card);
+    border: 1px solid var(--clr-outline-var);
+    border-radius: var(--radius-md);
+}
+
+.audit-table .num {
+    text-align: right;
+}
+
+.audit-table .table-empty {
+    text-align: center;
+    color: var(--clr-on-surface-var);
+}
+
+[data-theme="dark"] .seg-btn.active {
+    background: var(--clr-accent);
+    color: #0d1f15;
+}
