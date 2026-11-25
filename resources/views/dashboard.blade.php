@@ -639,6 +639,29 @@
         return api(url, { method: 'POST', body: JSON.stringify(body) });
     }
 
+    // Safari (iPhone/iPad) belum punya scroll anchoring: jika isi di atas layar berubah tinggi saat data
+    // diperbarui (mis. teks pindah baris), halaman ikut tergeser tiap polling. Browser lain menahan posisi
+    // sendiri. Di sini ditahan manual: catat posisi elemen tepat di bawah header, lalu kembalikan setelah update.
+    const NATIVE_SCROLL_ANCHORING = window.CSS?.supports?.('overflow-anchor', 'auto') ?? false;
+    function keepScrollPosition(update) {
+        if (NATIVE_SCROLL_ANCHORING || window.scrollY <= 0) return update();
+
+        const header = document.querySelector('.app-header');
+        const y = (header ? header.getBoundingClientRect().bottom : 0) + 8;
+        // Dari elemen terdalam ke luar: elemen yang diganti innerHTML terlepas, pakai induk terdekat yang masih ada
+        const chain = [];
+        for (let el = document.elementFromPoint(window.innerWidth / 2, y); el && el !== document.body; el = el.parentElement) {
+            chain.push([el, el.getBoundingClientRect().top]);
+        }
+
+        update();
+
+        const anchor = chain.find(([el]) => el.isConnected);
+        if (!anchor) return;
+        const shift = anchor[0].getBoundingClientRect().top - anchor[1];
+        if (Math.abs(shift) >= 1) window.scrollBy(0, shift);
+    }
+
     // ============ RENDER ZONES ============
     // Kartu monitoring (tab Dashboard)
     function renderZones(zones, systemMode) {
@@ -1008,52 +1031,56 @@
         pollInFlight = true;
         try {
             const data = await api("{{ route('dashboard.status') }}");
-            const control = data.device_control;
-            const sensor = data.latest_sensor;
-            desiredMode = control.system_mode;
-
-            if (sensor) {
-                document.getElementById('temp').innerText = fmt(sensor.temperature);
-                document.getElementById('hum').innerText = fmt(sensor.humidity);
-                document.getElementById('light').innerText = fmt(sensor.light_level, 0);
-                document.getElementById('timestamp').innerText = sensor.recorded_at;
-                const soils = (sensor.zones || []).map(z => z.soil_moisture).filter(v => v !== null);
-                document.getElementById('soil').innerText = soils.length ? fmt(soils.reduce((s,v)=>s+v,0)/soils.length, 0) : '--';
-            }
-            renderZones(sensor?.zones || [], sensor?.system_mode);
-            renderScheduleSoil(sensor?.zones || []);
-            renderAutoZones(sensor, data.device);
-            renderRelayControls(sensor, control.pending_relays || {}, control.system_mode);
-            renderSensorAlert(sensor);
-            renderDeviceStatus(data.device);
-            renderClock(data.device.clock);
-            renderFirmware(data.firmware);
-
-            updateAuditNotice(control.updated_by, control.updated_at_exact);
-            renderModeDetail(control);
-            const [badgeText, badgeClass] = MODE_BADGES[control.system_mode] || MODE_BADGES[0];
-            const badge = document.getElementById('irrig-mode-badge');
-            badge.innerText = badgeText;
-            badge.className = 'mode-badge ' + badgeClass;
-
-            // Mode bisa berubah dari dashboard lokal alat; samakan pilihan jika user tidak sedang mengedit
-            const select = document.getElementById('systemModeSelect');
-            if (document.activeElement !== select && parseInt(select.value) !== control.system_mode) {
-                select.value = control.system_mode;
-                showModeSections(control.system_mode);
-            }
-
-            if (data.recent_logs && data.recent_logs.length > 0) {
-                document.getElementById('audit-log-body').innerHTML = data.recent_logs.map(l => {
-                    const [date, time] = String(l.time_exact).split(' ');   // "d/m/Y H:i:s"
-                    return `<tr><td class="log-time"><span>${esc(date)}</span> <span>${esc(time)}</span></td>`
-                        + `<td><strong>${esc(l.user)}</strong></td><td>${esc(l.action)}</td></tr>`;
-                }).join('');
-            }
+            keepScrollPosition(() => renderStatus(data));
         } catch (err) {
             console.error('Fetch error:', err);
         } finally {
             pollInFlight = false;
+        }
+    }
+
+    function renderStatus(data) {
+        const control = data.device_control;
+        const sensor = data.latest_sensor;
+        desiredMode = control.system_mode;
+
+        if (sensor) {
+            document.getElementById('temp').innerText = fmt(sensor.temperature);
+            document.getElementById('hum').innerText = fmt(sensor.humidity);
+            document.getElementById('light').innerText = fmt(sensor.light_level, 0);
+            document.getElementById('timestamp').innerText = sensor.recorded_at;
+            const soils = (sensor.zones || []).map(z => z.soil_moisture).filter(v => v !== null);
+            document.getElementById('soil').innerText = soils.length ? fmt(soils.reduce((s,v)=>s+v,0)/soils.length, 0) : '--';
+        }
+        renderZones(sensor?.zones || [], sensor?.system_mode);
+        renderScheduleSoil(sensor?.zones || []);
+        renderAutoZones(sensor, data.device);
+        renderRelayControls(sensor, control.pending_relays || {}, control.system_mode);
+        renderSensorAlert(sensor);
+        renderDeviceStatus(data.device);
+        renderClock(data.device.clock);
+        renderFirmware(data.firmware);
+
+        updateAuditNotice(control.updated_by, control.updated_at_exact);
+        renderModeDetail(control);
+        const [badgeText, badgeClass] = MODE_BADGES[control.system_mode] || MODE_BADGES[0];
+        const badge = document.getElementById('irrig-mode-badge');
+        badge.innerText = badgeText;
+        badge.className = 'mode-badge ' + badgeClass;
+
+        // Mode bisa berubah dari dashboard lokal alat; samakan pilihan jika user tidak sedang mengedit
+        const select = document.getElementById('systemModeSelect');
+        if (document.activeElement !== select && parseInt(select.value) !== control.system_mode) {
+            select.value = control.system_mode;
+            showModeSections(control.system_mode);
+        }
+
+        if (data.recent_logs && data.recent_logs.length > 0) {
+            document.getElementById('audit-log-body').innerHTML = data.recent_logs.map(l => {
+                const [date, time] = String(l.time_exact).split(' ');   // "d/m/Y H:i:s"
+                return `<tr><td class="log-time"><span>${esc(date)}</span> <span>${esc(time)}</span></td>`
+                    + `<td><strong>${esc(l.user)}</strong></td><td>${esc(l.action)}</td></tr>`;
+            }).join('');
         }
     }
 
@@ -1539,7 +1566,7 @@
             const data = await api(STATS_URL + '?range=' + encodeURIComponent(statsRange));
             if (requestId !== statsRequestId) return;
             statsLoadedAt = Date.now();
-            renderStats(data);
+            keepScrollPosition(() => renderStats(data));
         } catch (e) {
             if (requestId !== statsRequestId) return;
             document.getElementById('stats-meta').textContent = 'Gagal memuat statistik';
