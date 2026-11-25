@@ -16,6 +16,15 @@ class ExampleTest extends TestCase
         $response->assertStatus(200);
     }
 
+    public function test_stylesheet_url_changes_with_file_version(): void
+    {
+        $version = filemtime(public_path('css/style.css'));
+
+        $this->get('/login')->assertSee("css/style.css?v={$version}", false);
+        $this->actingAs(User::factory()->create())->get('/dashboard')
+            ->assertSee("css/style.css?v={$version}", false);
+    }
+
     public function test_unauthenticated_user_redirected_to_login(): void
     {
         $response = $this->get('/');
