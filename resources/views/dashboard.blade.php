@@ -147,7 +147,6 @@
         <div class="override-control">
             <div>
                 <div class="override-label-title">Mode Sistem</div>
-                <div class="override-label-sub">Pilih mode operasional</div>
             </div>
             <select id="systemModeSelect" onchange="changeSystemMode()">
                 <option value="0" {{ $systemMode == 0 ? 'selected' : '' }}>Auto (Fuzzy)</option>
@@ -175,23 +174,16 @@
         <!-- AUTO: STATUS ZONA -->
         <div id="autoSettings" class="mode-settings mode-settings-column zone-panel" style="display: {{ $systemMode == 0 ? 'flex' : 'none' }};">
             <div class="zone-panel-head">
-                <div>
-                    <div class="mode-settings-title">Status Zona</div>
-                    <div class="form-hint" style="margin:0.15rem 0 0;">Durasi siram dihitung otomatis dari kelembaban tanah, suhu, dan cahaya.</div>
-                </div>
+                <div class="mode-settings-title">Status Zona</div>
                 <span class="pump-chip" id="auto-pump">Pompa Utama --</span>
             </div>
             <div class="alert-warning" id="auto-alert" style="display:none;"></div>
             <div id="auto-zone-container" class="schedule-grid"></div>
-            <div class="form-hint" id="auto-updated" style="margin:0;"></div>
         </div>
 
         <!-- SCHEDULE SETTINGS -->
         <div id="scheduleSettings" class="mode-settings mode-settings-column zone-panel" style="display: {{ $systemMode == 2 ? 'flex' : 'none' }};">
-            <div>
-                <div class="mode-settings-title">Jadwal Penyiraman</div>
-                <div class="form-hint" style="margin:0.15rem 0 0;">Maksimal {{ config('nursery.schedule_slots') }} slot per zona. Jadwal dilewati jika kelembaban tanah zona di atas {{ config('nursery.schedule_soil_max') }}%.</div>
-            </div>
+            <div class="mode-settings-title">Jadwal Penyiraman</div>
             <div id="schedule-container" class="schedule-grid"></div>
             <button class="btn-cta btn-cta--inline btn-cta--pill" onclick="saveSchedule(this)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1.1rem;height:1.1rem;">
@@ -206,11 +198,10 @@
 
     <!-- Relay Control (hanya mode Manual; firmware menolak perintah relay di mode lain) -->
     <div id="relaySection" style="display: {{ $systemMode == 1 ? 'block' : 'none' }};">
-    <div class="section-header" style="margin-bottom:0.25rem;">
+    <div class="section-header">
         <h3 class="section-title">Kontrol Relay Manual</h3>
         <span class="count-badge">Pompa + {{ config('nursery.zones') }} Zona</span>
     </div>
-    <p class="form-hint" style="margin:0 0 0.75rem;">Perintah sampai ke alat dalam ±5 detik. Pompa utama ikut menyala selama ada valve terbuka.</p>
     <div class="alert-warning" id="relay-hint" style="display:none; margin-bottom:0.75rem;">
         Relay hanya bisa dikontrol pada mode <strong>Manual</strong>. Ubah mode sistem terlebih dahulu.
     </div>
@@ -769,7 +760,7 @@
             const active = (control.schedules || []).reduce((sum, z) => sum + (z.slots || []).filter(s => s.active).length, 0);
             html = active ? `<strong>${active}</strong> jadwal aktif` : 'Belum ada jadwal aktif';
         } else {
-            html = 'Durasi siram dihitung fuzzy';
+            html = '';   // badge AUTO (FUZZY) sudah cukup
         }
         document.getElementById('irrig-detail').innerHTML = html;
     }
@@ -808,11 +799,10 @@
         if (z.state === 'soaking') return `Selesai menyiram, menunggu air meresap ${SOAK_DELAY_SEC} detik.`;
         if (z.soil_moisture === null) return 'Sensor tanah tidak terbaca, zona tidak disiram otomatis.';
         if (!fuzzyRuns) return 'Evaluasi fuzzy dilewati, data suhu/cahaya tidak valid.';
-        if (z.fuzzy_duration > 0) return 'Perlu disiram, menunggu jeda cooldown selesai.';
-        return 'Tanah cukup lembab, tidak perlu disiram.';
+        return '';   // idle normal: badge & rekomendasi fuzzy sudah cukup
     }
 
-    function renderAutoZones(sensor, device) {
+    function renderAutoZones(sensor) {
         const container = document.getElementById('auto-zone-container');
         // Firmware melewati evaluasi fuzzy jika DHT22 atau BH1750 error
         const fuzzyRuns = !!sensor && sensor.temperature !== null && sensor.humidity !== null && sensor.light_level !== null;
@@ -827,6 +817,7 @@
             const width = soil === null ? 0 : Math.max(0, Math.min(100, soil));
             const fuzzy = soil === null ? '--' : (z.fuzzy_duration > 0 ? fmt(z.fuzzy_duration, 0) + ' dtk' : 'Tidak siram');
             const on = !!z.relay_status;
+            const desc = sensor ? autoZoneDesc(z, fuzzyRuns) : 'Belum ada data dari alat.';
 
             html += `<div class="schedule-zone zone-status ${state || ''}">
                 <div class="schedule-zone-header">
@@ -849,7 +840,7 @@
                         <span class="schedule-slot-title">Valve Zona ${i}</span>
                         <span class="valve-pill ${on ? 'on' : ''}">${sensor ? (on ? 'ON' : 'OFF') : '--'}</span>
                     </div>
-                    <p class="zone-status-desc">${sensor ? autoZoneDesc(z, fuzzyRuns) : 'Belum ada data dari alat.'}</p>
+                    ${desc ? `<p class="zone-status-desc">${desc}</p>` : ''}
                 </div>
             </div>`;
         }
@@ -863,9 +854,6 @@
         const alert = document.getElementById('auto-alert');
         alert.style.display = (sensor && !fuzzyRuns) ? 'block' : 'none';
         alert.innerText = '⚠ Data DHT22/BH1750 tidak valid. Evaluasi fuzzy dilewati, tidak ada zona yang mulai disiram otomatis.';
-
-        document.getElementById('auto-updated').innerText = !sensor ? ''
-            : `Data alat: ${sensor.recorded_at}` + (device && !device.online ? ' · alat offline, status bisa sudah berubah' : '');
     }
 
     async function changeSystemMode() {
@@ -1054,7 +1042,7 @@
         }
         renderZones(sensor?.zones || [], sensor?.system_mode);
         renderScheduleSoil(sensor?.zones || []);
-        renderAutoZones(sensor, data.device);
+        renderAutoZones(sensor);
         renderRelayControls(sensor, control.pending_relays || {}, control.system_mode);
         renderSensorAlert(sensor);
         renderDeviceStatus(data.device);
@@ -1610,7 +1598,7 @@
         schedules: currentSchedules,
     });
     renderZones([], null);
-    renderAutoZones(null, null);
+    renderAutoZones(null);
     renderRelayControls(null, {}, desiredMode);
     fetchStatus();
     // Polling berhenti saat tab browser tidak aktif
