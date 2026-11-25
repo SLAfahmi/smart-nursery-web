@@ -35,6 +35,6 @@ class ExampleTest extends TestCase
     {
         $user = User::factory()->create();
         $response = $this->actingAs($user)->get('/dashboard');
-        $response->assertStatus(200);
+        $response->assertStatus(200)->assertSee('id="hero-clock"', false);
     }
 }

@@ -21,6 +21,11 @@
             <div class="hero-title">Smart Nursery</div>
             <div class="hero-sub">Monitoring &amp; Irigasi Otomatis Pembibitan Kelapa Sawit</div>
         </div>
+        {{-- Jam seperti dashboard lokal firmware, zona waktu aplikasi (sama dengan waktu log & jadwal) --}}
+        <div class="hero-meta">
+            <div class="hero-clock" id="hero-clock">{{ now()->format('H:i') }}</div>
+            <div class="hero-date" id="hero-date"></div>
+        </div>
     </div>
 
     <!-- Audit User Notice Banner -->
@@ -243,7 +248,6 @@
                 <div>
                     <div class="sensor-label">Rata Suhu Udara</div>
                     <div class="sensor-value"><span id="stat-temp">--</span><span class="sensor-unit">°C</span></div>
-                    <div class="stat-range" id="stat-temp-range">min -- · maks --</div>
                 </div>
             </div>
 
@@ -257,7 +261,6 @@
                 <div>
                     <div class="sensor-label">Rata Cahaya</div>
                     <div class="sensor-value"><span id="stat-light">--</span><span class="sensor-unit">lx</span></div>
-                    <div class="stat-range" id="stat-light-range">min -- · maks --</div>
                 </div>
             </div>
 
@@ -270,7 +273,6 @@
                 <div>
                     <div class="sensor-label">Rata Lembab Udara</div>
                     <div class="sensor-value"><span id="stat-hum">--</span><span class="sensor-unit">%</span></div>
-                    <div class="stat-range" id="stat-hum-range">min -- · maks --</div>
                 </div>
             </div>
 
@@ -283,7 +285,6 @@
                 <div>
                     <div class="sensor-label">Rata Lembab Tanah</div>
                     <div class="sensor-value"><span id="stat-soil">--</span><span class="sensor-unit">%</span></div>
-                    <div class="stat-range" id="stat-soil-range">min -- · maks --</div>
                 </div>
             </div>
         </div><!-- /sensor-grid -->
@@ -341,7 +342,6 @@
                     </tbody>
                 </table>
             </div>
-            <p class="form-hint" style="margin:0.6rem 0 0;">Durasi diperkirakan dari riwayat status valve yang tercatat di server.</p>
         </div>
 
     </div><!-- /stats-body -->
@@ -1223,6 +1223,20 @@
         });
     }
 
+    // ============ JAM BANNER ============
+    const APP_TIMEZONE = @json(config('app.timezone'));
+    const heroClockFormat = new Intl.DateTimeFormat('id-ID', { timeZone: APP_TIMEZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    const heroDateFormat = new Intl.DateTimeFormat('id-ID', { timeZone: APP_TIMEZONE, weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+
+    function updateHeroClock() {
+        const now = new Date();
+        const parts = Object.fromEntries(heroClockFormat.formatToParts(now).map(p => [p.type, p.value]));
+        document.getElementById('hero-clock').textContent = `${parts.hour}:${parts.minute}`;   // 21:05, bukan 21.05
+        document.getElementById('hero-date').textContent = heroDateFormat.format(now);
+    }
+    updateHeroClock();
+    setInterval(updateHeroClock, 1000);
+
     // ============ STATISTIK ============
     // Data dari StatisticsController; dimuat saat tab Statistik dibuka, bukan lewat polling 3 detik
     const STATS_URL = "{{ route('dashboard.statistics') }}";
@@ -1447,7 +1461,6 @@
 
     function setStatTile(key, stat, digits) {
         document.getElementById(`stat-${key}`).textContent = fmt(stat?.avg, digits);
-        document.getElementById(`stat-${key}-range`).textContent = `min ${fmt(stat?.min, digits)} · maks ${fmt(stat?.max, digits)}`;
     }
 
     function renderStats(data) {

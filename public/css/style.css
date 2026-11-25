@@ -367,14 +367,44 @@ body.has-bottom-nav {
     margin-top: 0.35rem;
 }
 
+/* Jam di kanan banner (seperti dashboard lokal firmware) */
+.hero-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.3rem;
+    z-index: 1;
+}
+
+.hero-clock {
+    font-size: 1.6rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+}
+
+.hero-date {
+    font-size: 0.7rem;
+    opacity: 0.8;
+    white-space: nowrap;
+}
+
 @media (max-width: 599px) {
     .hero-banner {
         padding: 1rem 1.125rem;
         border-radius: var(--radius-lg);
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
     }
 
     .hero-text .hero-title {
         font-size: 1.15rem;
+    }
+
+    .hero-meta {
+        align-items: flex-start;
     }
 }
 
